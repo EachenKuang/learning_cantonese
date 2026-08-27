@@ -1,0 +1,36 @@
+[Unit]
+Description=Jyut private cloud profile sync
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jyut-sync
+Group=jyut-sync
+WorkingDirectory=/opt/jyut-sync-live
+Environment=HOST=127.0.0.1
+Environment=PORT=8788
+Environment=ALLOWED_ORIGIN=https://jyut.kuangyichen.com
+Environment=SESSION_DAYS=30
+Environment=JYUT_SYNC_DATA_FILE=/var/lib/jyut-sync/store.json
+ExecStart=/usr/local/bin/node /opt/jyut-sync-live/sync-server.mjs
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+UMask=0077
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths=/var/lib/jyut-sync
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=160M
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

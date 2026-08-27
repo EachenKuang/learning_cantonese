@@ -1,6 +1,6 @@
-# 粤学堂 · 云端粤语 TTS 代理（自建服务器版）
+# 粤学堂 · 自建后端服务
 
-把 Microsoft Edge Read Aloud 的粤语神经音色封装成本站同源 HTTP 接口。
+本目录包含同源粤语 TTS 和轻量邀请制学习档案同步服务。
 **网站前端在没有本地粤语语音包的设备（尤其是安卓）上，可调用本服务合成粤语朗读。**
 
 ## 部署（任选一种）
@@ -61,3 +61,39 @@ GET /api/tts?text=原諒我這一生不羈放縱愛自由&voice=hiuGaai&rate=0.7
 
 - Edge TTS 是非官方接口，微软可能调整；若追求长期稳定，可平滑替换为 Azure 认知服务（代码结构不变，只换合成引擎）。
 - 生产环境应只监听 `127.0.0.1`，由 Nginx 暴露 `/api/tts` 并配置限流。
+
+## 邀请制学习档案同步
+
+`sync-server.mjs` 默认监听 `127.0.0.1:8788`，提供：
+
+- `POST /login`、`POST /logout`、`GET /session`
+- 登录后 `GET /profile`、`PUT /profile`
+- 没有注册、用户列表或跨用户读取接口
+
+生产环境使用 `deploy/jyut-sync.service`，数据文件为 `/var/lib/jyut-sync/store.json`。目录归 `jyut-sync` 服务账户所有并设为 `0700`，文件由程序以 `0600` 原子写入。
+
+首次预留账户（尚不能登录）：
+
+```bash
+sudo -u jyut-sync env JYUT_SYNC_DATA_FILE=/var/lib/jyut-sync/store.json \
+  /usr/local/bin/node /opt/jyut-sync-live/manage-user.mjs ensure eachen '易浅'
+sudo systemctl reload jyut-sync
+```
+
+由账户本人交互式设置密码（至少 12 个字符，输入不回显）：
+
+```bash
+sudo -u jyut-sync env JYUT_SYNC_DATA_FILE=/var/lib/jyut-sync/store.json \
+  /usr/local/bin/node /opt/jyut-sync-live/manage-user.mjs set-password eachen '易浅'
+sudo systemctl reload jyut-sync
+```
+
+邀请后续用户时，把 `eachen` 和显示名换成新的用户 ID/名称即可。停用账户会阻止现有会话继续访问：
+
+```bash
+sudo -u jyut-sync env JYUT_SYNC_DATA_FILE=/var/lib/jyut-sync/store.json \
+  /usr/local/bin/node /opt/jyut-sync-live/manage-user.mjs disable USER_ID
+sudo systemctl reload jyut-sync
+```
+
+注意：账户管理工具直接更新数据文件，服务运行时每次修改后都必须执行 `systemctl reload jyut-sync`。不要把密码作为命令行参数或环境变量传入。

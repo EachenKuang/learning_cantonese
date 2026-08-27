@@ -32,12 +32,18 @@ const LS = {
 };
 const PROFILE_KEY = 'canto_profile_v2';
 const LEGACY_SESSION_KEY = 'canto_session';
+const CLOUD_META_KEY = 'canto_cloud_meta_v1';
+const CLOUD_BASE = '/api/account';
+let cloudState = {checked:false, authenticated:false, user:null, version:0, status:'本机档案', updatedAt:null, error:null};
+let cloudSyncTimer = null;
+let cloudPushChain = Promise.resolve();
 function freshProgress(){
   return {
     favorites:[], learned:[], practices:[], quiz:[], dialogues:[],
     checkins:{}, lastCheckin:null, streak:0,
     goalCount:10, goalDate:null, goalToday:0, goalWords:[],
-    reminder:false, reminderSentDate:null, activities:[], lastStudyDate:null
+    reminder:false, reminderSentDate:null, activities:[], lastStudyDate:null,
+    modifiedAt:0
   };
 }
 function cleanStringList(v){ return Array.isArray(v) ? [...new Set(v.filter(x => typeof x === 'string').slice(0,500))] : []; }
@@ -59,7 +65,8 @@ function normalizeProgress(raw){
     goalToday:Math.max(0,Math.min(100,Number(raw.goalToday)||0)), goalWords:cleanStringList(raw.goalWords),
     reminder:!!raw.reminder, reminderSentDate:typeof raw.reminderSentDate === 'string' ? raw.reminderSentDate : null,
     activities:Array.isArray(raw.activities) ? raw.activities.slice(0,6).map(x => ({icon:String(x?.icon||'📖').slice(0,12),title:String(x?.title||'学习记录').slice(0,80),sub:String(x?.sub||'').slice(0,120),route:ROUTES[x?.route] ? x.route : 'home',time:Number(x?.time)||Date.now()})) : [],
-    lastStudyDate:typeof raw.lastStudyDate === 'string' ? raw.lastStudyDate : null
+    lastStudyDate:typeof raw.lastStudyDate === 'string' ? raw.lastStudyDate : null,
+    modifiedAt:Math.max(0, Number(raw.modifiedAt)||0)
   };
 }
 function migrateLegacyProgress(){
@@ -71,7 +78,119 @@ function migrateLegacyProgress(){
 function getProgress(){
   return normalizeProgress(LS.get(PROFILE_KEY, freshProgress()));
 }
-function saveProgress(p){ LS.set(PROFILE_KEY, normalizeProgress(p)); }
+function storeProgress(p, {touch=false, sync=false}={}){
+  const normalized = normalizeProgress(p);
+  if(touch) normalized.modifiedAt = Date.now();
+  LS.set(PROFILE_KEY, normalized);
+  if(sync) scheduleCloudSync();
+  return normalized;
+}
+function saveProgress(p){ return storeProgress(p, {touch:true, sync:true}); }
+
+function profileEqual(a,b){ return JSON.stringify(normalizeProgress(a)) === JSON.stringify(normalizeProgress(b)); }
+function mergeUnique(items, keyFn, limit){
+  const seen = new Set();
+  return items.filter(item => { const key=keyFn(item); if(seen.has(key)) return false; seen.add(key); return true; })
+    .sort((a,b)=>(Number(b?.time)||0)-(Number(a?.time)||0)).slice(0,limit);
+}
+function mergeFirstCloud(localRaw, remoteRaw){
+  const local=normalizeProgress(localRaw), remote=normalizeProgress(remoteRaw);
+  if(!remoteRaw) return local;
+  const newer = local.modifiedAt >= remote.modifiedAt ? local : remote;
+  const out = {...newer};
+  ['favorites','learned','dialogues','goalWords'].forEach(key => { out[key]=[...new Set([...(local[key]||[]),...(remote[key]||[])])]; });
+  out.checkins = {...remote.checkins,...local.checkins};
+  out.practices = mergeUnique([...local.practices,...remote.practices], x=>`${x.time}|${x.label}|${x.score}`, 60);
+  out.activities = mergeUnique([...local.activities,...remote.activities], x=>`${x.time}|${x.title}|${x.route}`, 6);
+  out.streak = Math.max(local.streak,remote.streak);
+  out.modifiedAt = Math.max(local.modifiedAt,remote.modifiedAt);
+  return normalizeProgress(out);
+}
+function mergeSet3(base,local,remote){
+  const b=new Set(base||[]), l=new Set(local||[]), r=new Set(remote||[]);
+  const out=new Set([...b,...l,...r]);
+  for(const item of b){ if(!l.has(item)||!r.has(item)) out.delete(item); }
+  return [...out];
+}
+function mergeCloud3(baseRaw, localRaw, remoteRaw){
+  const base=normalizeProgress(baseRaw), local=normalizeProgress(localRaw), remote=normalizeProgress(remoteRaw);
+  const out={...local};
+  const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+  const setKeys=new Set(['favorites','learned','dialogues','goalWords']);
+  const appendKeys=new Set(['practices','activities']);
+  for(const key of Object.keys(base)){
+    if(same(local[key],base[key])) out[key]=remote[key];
+    else if(same(remote[key],base[key])||same(local[key],remote[key])) out[key]=local[key];
+    else if(setKeys.has(key)) out[key]=mergeSet3(base[key],local[key],remote[key]);
+    else if(appendKeys.has(key)) out[key]=mergeUnique([...(local[key]||[]),...(remote[key]||[])], x=>key==='practices'?`${x.time}|${x.label}|${x.score}`:`${x.time}|${x.title}|${x.route}`, key==='practices'?60:6);
+    else if(key==='checkins') out[key]={...remote[key],...local[key]};
+    else out[key]=local.modifiedAt>=remote.modifiedAt?local[key]:remote[key];
+  }
+  out.modifiedAt=Math.max(local.modifiedAt,remote.modifiedAt);
+  return normalizeProgress(out);
+}
+
+async function cloudFetch(path, options={}){
+  const {headers={},...rest}=options;
+  const res = await fetch(CLOUD_BASE+path, {credentials:'same-origin',cache:'no-store',...rest,headers:{Accept:'application/json',...(options.body?{'Content-Type':'application/json'}:{}),...headers}});
+  let data={}; try{ data=await res.json(); }catch(_){}
+  return {res,data};
+}
+function setCloudState(patch){
+  cloudState={...cloudState,...patch};
+  if(currentRoute==='profile') renderProfile();
+}
+function saveCloudBase(profile){
+  LS.set(CLOUD_META_KEY,{userId:cloudState.user?.id,version:cloudState.version,base:normalizeProgress(profile),updatedAt:cloudState.updatedAt});
+}
+async function pushCloudProfile(){
+  if(!cloudState.authenticated) return false;
+  const local=getProgress();
+  setCloudState({status:'同步中…',error:null});
+  const {res,data}=await cloudFetch('/profile',{method:'PUT',body:JSON.stringify({version:cloudState.version,profile:local})});
+  if(res.status===401){ setCloudState({authenticated:false,user:null,status:'登录已失效',error:'请重新登录'}); return false; }
+  if(res.status===409){
+    const meta=LS.get(CLOUD_META_KEY,null);
+    const merged=meta?.userId===cloudState.user?.id&&meta?.base ? mergeCloud3(meta.base,local,data.profile) : mergeFirstCloud(local,data.profile);
+    storeProgress(merged);
+    cloudState.version=Number(data.version)||0;
+    const retry=await cloudFetch('/profile',{method:'PUT',body:JSON.stringify({version:cloudState.version,profile:merged})});
+    if(!retry.res.ok){ setCloudState({status:'同步待重试',error:'云端版本冲突'}); return false; }
+    cloudState.version=retry.data.version; cloudState.updatedAt=retry.data.updatedAt; saveCloudBase(merged);
+    setCloudState({status:'已同步',error:null}); return true;
+  }
+  if(!res.ok){ setCloudState({status:'同步待重试',error:res.status===429?'操作太频繁，请稍后再试':'网络暂不可用'}); return false; }
+  cloudState.version=data.version; cloudState.updatedAt=data.updatedAt; saveCloudBase(local);
+  setCloudState({status:'已同步',error:null}); return true;
+}
+function queueCloudPush(){
+  cloudPushChain=cloudPushChain.catch(()=>false).then(()=>pushCloudProfile());
+  return cloudPushChain;
+}
+function scheduleCloudSync(){
+  if(!cloudState.authenticated) return;
+  clearTimeout(cloudSyncTimer);
+  cloudSyncTimer=setTimeout(queueCloudPush,900);
+}
+async function initCloudSync(){
+  try{
+    const session=await cloudFetch('/session');
+    if(!session.res.ok||!session.data.authenticated){ setCloudState({checked:true,authenticated:false,user:null,status:'本机档案'}); return; }
+    cloudState={...cloudState,checked:true,authenticated:true,user:session.data.user,status:'正在合并…'};
+    const remote=await cloudFetch('/profile');
+    if(!remote.res.ok) throw new Error('profile_load');
+    cloudState.version=Number(remote.data.version)||0; cloudState.updatedAt=remote.data.updatedAt||null;
+    const local=getProgress(), meta=LS.get(CLOUD_META_KEY,null);
+    let merged;
+    if(meta?.userId&&meta.userId!==cloudState.user.id) merged=normalizeProgress(remote.data.profile||freshProgress());
+    else if(meta?.userId===cloudState.user.id&&meta?.base) merged=mergeCloud3(meta.base,local,remote.data.profile);
+    else merged=mergeFirstCloud(local,remote.data.profile);
+    storeProgress(merged);
+    if(profileEqual(merged,remote.data.profile)){ saveCloudBase(merged); setCloudState({status:'已同步',error:null}); }
+    else await queueCloudPush();
+    if(currentRoute==='home') renderHome();
+  }catch(_){ setCloudState({checked:true,status:cloudState.authenticated?'同步待重试':'本机档案',error:cloudState.authenticated?'暂时无法连接云端':null}); }
+}
 function markStudyToday(){
   const p = getProgress();
   if(p.lastStudyDate !== todayKey()){ p.lastStudyDate = todayKey(); saveProgress(p); }
@@ -928,17 +1047,53 @@ async function importProfile(file){
     const parsed = JSON.parse(await file.text());
     const raw = parsed && parsed.progress ? parsed.progress : parsed;
     if(!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('invalid');
-    if(!confirm('导入会覆盖当前设备上的学习档案，确定继续吗？')) return;
+    if(!confirm(cloudState.authenticated?'导入会覆盖本机档案，并同步到你的云端账户。确定继续吗？':'导入会覆盖当前设备上的学习档案，确定继续吗？')) return;
     saveProgress(normalizeProgress(raw));
     toast('学习档案已恢复');
     renderProfile(); renderHome();
   }catch(_){ toast('无法读取这份学习档案，请确认文件格式'); }
 }
 function resetProfile(){
+  if(cloudState.authenticated){ toast('为避免误删云端进度，请先退出云端再清除本机档案'); return; }
   if(!confirm('确定清除当前设备上的进度、收藏、打卡和练习历史吗？此操作无法撤销。')) return;
   localStorage.removeItem(PROFILE_KEY);
+  localStorage.removeItem(CLOUD_META_KEY);
   toast('本机学习档案已清除');
   renderProfile(); renderHome();
+}
+async function loginCloud(){
+  const userId=$('#cloudUser')?.value.trim(), password=$('#cloudPassword')?.value||'';
+  if(!userId||!password){ toast('请输入账户和密码'); return; }
+  const button=$('#cloudLogin'); if(button){ button.disabled=true; button.textContent='登录中…'; }
+  try{
+    const {res,data}=await cloudFetch('/login',{method:'POST',body:JSON.stringify({userId,password})});
+    if(!res.ok){ toast(res.status===429?'尝试次数过多，请稍后再试':'账户或密码不正确'); return; }
+    cloudState={checked:true,authenticated:true,user:data.user,version:0,status:'正在合并…',updatedAt:null,error:null};
+    await initCloudSync();
+    toast('已登录，手机和网页进度会自动同步');
+  }catch(_){ toast('暂时无法连接云端，请稍后再试'); }
+  finally{ const field=$('#cloudPassword'); if(field) field.value=''; if(button){button.disabled=false;button.textContent='登录并同步';} }
+}
+async function logoutCloud(){
+  try{ await cloudFetch('/logout',{method:'POST',body:'{}'}); }catch(_){}
+  clearTimeout(cloudSyncTimer);
+  setCloudState({checked:true,authenticated:false,user:null,version:0,status:'本机档案',updatedAt:null,error:null});
+  toast('已退出云端；本机档案仍保留');
+}
+function cloudPanelHtml(){
+  if(!cloudState.checked) return `<div class="cloud-status"><span class="cloud-dot busy"></span><div><b>正在检查云端账户…</b><small>不影响本机学习</small></div></div>`;
+  if(cloudState.authenticated){
+    const when=cloudState.updatedAt?new Date(cloudState.updatedAt).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):'首次同步中';
+    return `<div class="cloud-status"><span class="cloud-dot online"></span><div><b>${esc(cloudState.user.displayName||cloudState.user.id)} · ${esc(cloudState.status)}</b><small>账户 ${esc(cloudState.user.id)} · 最近云端更新 ${esc(when)}</small>${cloudState.error?`<small class="cloud-error">${esc(cloudState.error)}</small>`:''}</div></div>
+      <div class="profile-actions"><button class="btn btn-primary sm" id="cloudSyncNow">↻ 立即同步</button><button class="btn btn-ghost sm" id="cloudLogout">退出云端</button></div>`;
+  }
+  return `<p>需要跨手机和电脑使用时，可登录受邀账户。网站不开放公开注册，也不会把本机录音上传到云端。</p>
+    <div class="cloud-login">
+      <label>账户<input id="cloudUser" autocomplete="username" value="eachen" maxlength="40" spellcheck="false"></label>
+      <label>密码<input id="cloudPassword" type="password" autocomplete="current-password" maxlength="256"></label>
+      <button class="btn btn-primary sm" id="cloudLogin">登录并同步</button>
+    </div>
+    <div class="profile-cloud-note">云端仅同步进度、目标、收藏、打卡和练习摘要；每个账户的数据独立存放。新账户由站点管理员邀请创建。</div>`;
 }
 function renderProfile(){
   const body = $('#profileBody');
@@ -1007,7 +1162,10 @@ function renderProfile(){
           <button class="btn btn-ghost sm danger" id="profileReset">清除本机档案</button>
           <input id="profileFile" class="hidden" type="file" accept="application/json,.json">
         </div>
-        <div class="profile-cloud-note">云端同步尚未开放；后续会作为可选能力提供，不影响当前学习。</div>
+      </div>
+      <div class="profile-col profile-cloud" style="grid-column:1/-1">
+        <h3>☁️ 可选云端账户</h3>
+        ${cloudPanelHtml()}
       </div>
     </div>`;
   /* 事件 */
@@ -1023,6 +1181,10 @@ function renderProfile(){
   $('#profileImport').onclick = () => $('#profileFile').click();
   $('#profileFile').onchange = e => { const f = e.target.files[0]; if(f) importProfile(f); e.target.value=''; };
   $('#profileReset').onclick = resetProfile;
+  const cloudLogin=$('#cloudLogin'); if(cloudLogin) cloudLogin.onclick=loginCloud;
+  const cloudPassword=$('#cloudPassword'); if(cloudPassword) cloudPassword.onkeydown=e=>{if(e.key==='Enter') loginCloud();};
+  const cloudSyncNow=$('#cloudSyncNow'); if(cloudSyncNow) cloudSyncNow.onclick=async()=>{ await queueCloudPush(); toast(cloudState.error?'同步尚未完成':'云端已是最新'); };
+  const cloudLogout=$('#cloudLogout'); if(cloudLogout) cloudLogout.onclick=logoutCloud;
   $$('#profileBody .fav-item').forEach(el => {
     el.querySelector('.fi-del').onclick = e => {
       e.stopPropagation();
@@ -1402,6 +1564,7 @@ function init(){
     if(p.goalDate !== today){ p.goalDate = today; p.goalToday = 0; p.goalWords = []; saveProgress(p); }
   }
   navigate(routeFromLocation(), {replace:true});
+  initCloudSync();
   updateVoiceUI();
   maybeRemind();
   setTimeout(updateVoiceUI, 800);

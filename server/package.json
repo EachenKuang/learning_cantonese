@@ -1,16 +1,18 @@
 {
   "name": "jyut-cantonese-tts",
   "version": "1.0.0",
-  "description": "Same-origin Cantonese neural TTS service for 粵學堂",
+  "description": "Same-origin Cantonese TTS and invite-only profile sync for 粵學堂",
   "type": "module",
   "scripts": {
     "start": "node tts-proxy.mjs",
-    "check": "node --check tts-proxy.mjs"
+    "start:tts": "node tts-proxy.mjs",
+    "start:sync": "node sync-server.mjs",
+    "check": "node --check tts-proxy.mjs && node --check sync-store.mjs && node --check sync-server.mjs && node --check manage-user.mjs"
   },
   "keywords": [],
   "license": "MIT",
   "engines": {
-    "node": ">=20"
+    "node": ">=14.17"
   },
   "dependencies": {
     "msedge-tts": "^2.0.7"
