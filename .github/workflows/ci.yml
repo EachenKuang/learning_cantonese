@@ -1,13 +1,20 @@
 name: ci
 on:
   push:
+    branches:
+      - '**'
   pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   verify:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -21,10 +28,20 @@ jobs:
           node --check sw.js
       - name: 数据完整性校验
         run: node scripts/verify-data.mjs
-      - name: 滚动更新 ci-ok tag（仅 main 且校验通过）
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+  promote:
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: 滚动更新 ci-ok tag
         run: |
-          git config user.name "ci-bot"
-          git config user.email "ci-bot@users.noreply.github.com"
-          git tag -f ci-ok
-          git push origin ci-ok --force
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          if [ "$remote_main" != "$GITHUB_SHA" ]; then
+            echo "main 已有更新提交，跳过旧版本晋级：$GITHUB_SHA"
+            exit 0
+          fi
+          git push origin "$GITHUB_SHA:refs/tags/ci-ok" --force

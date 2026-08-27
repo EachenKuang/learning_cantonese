@@ -6,6 +6,7 @@ export PATH="${PATH:-}:/usr/local/bin:/usr/bin:/bin"
 
 REPO="${REPO:-git@github.com:EachenKuang/learning_cantonese.git}"
 BRANCH="${BRANCH:-main}"
+APPROVED_REF="${APPROVED_REF:-refs/heads/$BRANCH}"
 SITE_URL="${SITE_URL:-https://jyut.kuangyichen.com}"
 STATIC_BASE="${STATIC_BASE:-/var/www/jyut-releases}"
 STATIC_LIVE="${STATIC_LIVE:-/var/www/jyut-live}"
@@ -202,6 +203,7 @@ cat > "$METADATA_TMP" <<JSON
 {
   "commit": "$COMMIT",
   "branch": "$BRANCH",
+  "approvedRef": "$APPROVED_REF",
   "source": "$REPO",
   "deployedAt": "$(date -Iseconds)",
   "staticRelease": "$STATIC_RELEASE",

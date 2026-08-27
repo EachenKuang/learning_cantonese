@@ -100,7 +100,7 @@ sudo systemctl reload jyut-sync
 
 ## 自动发布
 
-生产服务器使用与 `eachen_blog` 相同的定时巡检模式：`check-deploy-jyut.sh` 每 5 分钟读取 GitHub `main` 的提交；发现新提交后调用 `deploy-jyut-clean.sh`，从该精确 commit 创建版本目录并原子切换软链。
+生产服务器使用与 `eachen_blog` 相同的定时巡检模式：GitHub CI 在 `main` 通过语法和数据校验后滚动更新 `ci-ok` 标签；`check-deploy-jyut.sh` 每 5 分钟只读取 `refs/tags/ci-ok`。发现新的已验证提交后调用 `deploy-jyut-clean.sh`，从该精确 commit 创建版本目录并原子切换软链。CI 未通过时标签不会前移，线上继续保留旧版本。
 
 发布脚本只更新静态站和发生变化的后端服务代码，不会覆盖 `/var/lib/jyut-sync/store.json`，也不会自动安装仓库里的 Nginx/systemd 配置。上线前会检查 JavaScript 语法、Service Worker 缓存版本和 Nginx 配置；上线后检查首页、账户 API 与 TTS，失败则切回旧版本。
 
