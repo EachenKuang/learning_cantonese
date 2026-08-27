@@ -838,3 +838,43 @@ input{font-family:inherit;color:inherit}
 .wc-explay:hover{background:var(--red);color:#fff}
 /* 文化页多 tab 换行 */
 .ph-tabs{flex-wrap:wrap}
+
+/* ============ 录音实时电平条 ============ */
+.vu-wrap{width:140px;height:12px;border-radius:8px;background:var(--paper-2);overflow:hidden;border:1px solid var(--line);flex:none;margin-left:2px}
+.vu-bar{height:100%;width:0%;background:linear-gradient(90deg,#5DCAA5,#EF9F27,#E24B4A);border-radius:8px;transition:width .06s linear}
+@media (max-width:520px){.vu-wrap{width:100%;margin-top:4px}}
+
+/* ============ 声调听辨训练 ============ */
+.td-body{padding:6px 2px}
+.td-q{font-weight:800;font-size:14px;color:var(--ink-2);margin-bottom:10px}
+.td-play{display:block;margin:0 auto 16px}
+.td-opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+.td-opt{
+  display:flex;flex-direction:column;align-items:center;gap:3px;padding:13px 8px;
+  border-radius:13px;background:var(--paper);border:1px solid var(--line);
+  transition:all .18s;cursor:pointer;
+}
+.td-opt b{font-size:22px;color:var(--red);font-weight:900}
+.td-opt span{font-size:12px;color:var(--ink-2)}
+.td-opt:hover{border-color:var(--red);transform:translateY(-2px)}
+.td-opt:disabled{opacity:.45;cursor:default;transform:none}
+.td-fb{margin-top:14px;font-weight:700;font-size:13.5px;min-height:24px}
+.td-ok{color:var(--green)}
+.td-no{color:var(--red)}
+.td-done{text-align:center;padding:10px 0}
+.td-done b{font-size:20px;font-family:var(--serif)}
+.td-done p{color:var(--ink-3);margin:8px 0 16px;font-size:13.5px}
+
+/* ============ SRS 间隔复习模式 ============ */
+.word-card.review-card{cursor:pointer}
+.review-card .wc-han.quizzed{color:var(--ink-3)}
+.review-actions{display:flex;gap:8px;margin-top:10px}
+.review-actions .btn{flex:1}
+.review-empty{grid-column:1/-1;text-align:center;padding:26px 0;color:var(--ink-3)}
+.cont-review{
+  display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;cursor:pointer;
+  background:var(--gold-soft);border:1px dashed var(--gold);margin-bottom:8px;transition:all .2s;
+}
+.cont-review:hover{border-color:var(--gold);transform:translateX(3px)}
+.cont-review b{color:var(--gold);font-size:14px}
+.cont-review span{font-size:12px;color:var(--ink-3)}

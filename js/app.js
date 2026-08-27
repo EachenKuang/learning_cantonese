@@ -42,7 +42,7 @@ function freshProgress(){
     favorites:[], learned:[], practices:[], quiz:[], dialogues:[],
     checkins:{}, lastCheckin:null, streak:0,
     goalCount:10, goalDate:null, goalToday:0, goalWords:[],
-    reminder:false, reminderSentDate:null, activities:[], lastStudyDate:null,
+    reminder:false, reminderSentDate:null, activities:[], lastStudyDate:null, reviews:{},
     modifiedAt:0
   };
 }
@@ -66,7 +66,17 @@ function normalizeProgress(raw){
     reminder:!!raw.reminder, reminderSentDate:typeof raw.reminderSentDate === 'string' ? raw.reminderSentDate : null,
     activities:Array.isArray(raw.activities) ? raw.activities.slice(0,6).map(x => ({icon:String(x?.icon||'📖').slice(0,12),title:String(x?.title||'学习记录').slice(0,80),sub:String(x?.sub||'').slice(0,120),route:ROUTES[x?.route] ? x.route : 'home',time:Number(x?.time)||Date.now()})) : [],
     lastStudyDate:typeof raw.lastStudyDate === 'string' ? raw.lastStudyDate : null,
-    modifiedAt:Math.max(0, Number(raw.modifiedAt)||0)
+    modifiedAt:Math.max(0, Number(raw.modifiedAt)||0),
+    reviews:(() => {
+      const rv = {};
+      if(raw.reviews && typeof raw.reviews === 'object'){
+        Object.entries(raw.reviews).slice(0,1000).forEach(([k,v]) => {
+          if(typeof k !== 'string' || !k) return;
+          rv[k] = { box: Math.max(0, Math.min(5, Number(v?.box)||1)), due: typeof v?.due === 'string' ? v.due : new Date().toISOString().slice(0,10) };
+        });
+      }
+      return rv;
+    })()
   };
 }
 function migrateLegacyProgress(){
@@ -329,10 +339,27 @@ function playNextCloud(){
   cloudAudio.onerror = fallback;
   cloudAudio.play().catch(fallback);
 }
+function splitChunks(t, max){
+  const segs = t.split(/(?<=[，。！？、；：,.!?;:\s])/).filter(Boolean);
+  const out = []; let cur = '';
+  for(const p of segs){
+    if((cur + p).length > max && cur){ out.push(cur.trim()); cur = p; }
+    else cur += p;
+  }
+  if(cur.trim()) out.push(cur.trim());
+  return out;
+}
 function speak(text, opts={}){
   const cleaned = cleanForSpeech(text);
   if(!cleaned) return;
   markStudyToday();
+  /* 长文本分块：避免 iOS 长句截断，超 16 字按标点切块顺序朗读 */
+  const MAX = 16;
+  if(cleaned.length > MAX && !opts.noSplit){
+    const chunks = splitChunks(cleaned, MAX);
+    chunks.forEach((c, i) => speak(c, i === 0 ? {...opts, noSplit:true} : {...opts, noSplit:true, queue:true}));
+    return;
+  }
   if(cloudTTS.ready){
     if(!opts.queue) stopSpeak();
     cloudQueue.push({text:cleaned, opts});
@@ -353,10 +380,27 @@ function stopSpeak(){
 
 /* ================= 录音与发音评估 ================= */
 let mediaRecorder = null, chunks = [], recordedBlob = null, recording = false, recordedUrl = null;
+let audioCtx = null, analyser = null, vuRaf = 0;
+function vuLoop(){
+  if(!analyser || !recording){ return; }
+  const data = new Uint8Array(analyser.fftSize);
+  analyser.getByteTimeDomainData(data);
+  let sum = 0;
+  for(let i = 0; i < data.length; i++){ const v = (data[i] - 128) / 128; sum += v * v; }
+  const rms = Math.sqrt(sum / data.length);
+  const bar = document.getElementById('vuBar');
+  if(bar) bar.style.width = Math.min(100, Math.round(rms * 420)) + '%';
+  vuRaf = requestAnimationFrame(vuLoop);
+}
 async function initRecorder(){
   if(mediaRecorder) return true;
   try{
     const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    src.connect(analyser);
     mediaRecorder = new MediaRecorder(stream);
     mediaRecorder.ondataavailable = e => chunks.push(e.data);
     mediaRecorder.onstop = async () => {
@@ -395,12 +439,16 @@ function startRecord(){
     const btn = $('#ptRecord');
     if(btn){ btn.textContent = '⏹ 停止录音'; btn.classList.add('recording'); }
     $('#practiceStatus').textContent = '🔴 录音中，请跟着念…';
+    if(vuRaf) cancelAnimationFrame(vuRaf);
+    vuRaf = requestAnimationFrame(vuLoop);
   });
 }
 function stopRecord(){
   if(!recording) return;
   recording = false;
   mediaRecorder.stop();
+  if(vuRaf){ cancelAnimationFrame(vuRaf); vuRaf = 0; }
+  const bar = document.getElementById('vuBar'); if(bar) bar.style.width = '0%';
   const btn = $('#ptRecord');
   if(btn){ btn.textContent = '● 重新录音'; btn.classList.remove('recording'); }
 }
@@ -559,12 +607,16 @@ function renderHome(){
     $('#streakChip').textContent = p.streak + ' 天';
     /* 继续学习 */
     const acts = (p.activities||[]).slice(0,3);
-    $('#continueList').innerHTML = acts.length ? acts.map(a => `
+    const dueN = reviewDueCount();
+    const reviewEntry = dueN > 0 ? `<div class="cont-review" id="reviewEntry"><span>📅</span><b>待复习 ${dueN} 个词</b><span style="margin-left:auto">去复习 →</span></div>` : '';
+    const re = $('#reviewEntry');
+    if(re) re.onclick = () => { vocabReviewOnly = true; navigate('vocab'); };
+    $('#continueList').innerHTML = reviewEntry + (acts.length ? acts.map(a => `
       <button class="cont-item" data-nav="${a.route}">
         <span class="ci-ico">${esc(a.icon)}</span>
         <div><div class="ci-title">${esc(a.title)}</div><div class="ci-sub">${esc(a.sub)}</div></div>
         <span class="ci-arrow">→</span>
-      </button>`).join('') : `<div class="history-empty" style="border:none;padding:14px">还没有学习记录，先从发音或场景词汇开始吧～</div>`;
+      </button>`).join('') : `<div class="history-empty" style="border:none;padding:14px">还没有学习记录，先从发音或场景词汇开始吧～</div>`);
     $$('#continueList .cont-item').forEach(el => el.onclick = () => navigate(el.dataset.nav));
   }
   /* 模块入口 */
@@ -616,12 +668,61 @@ function checkin(){
 
 /* ================= 语音系统 ================= */
 let phTab = 'initials', phSel = null;
+
+/* ================= 声调听辨训练 ================= */
+let td = {on:false, i:0, correct:0, streak:0, best:0, total:10, answer:null, opts:[]};
+function renderToneDrill(){
+  const body = $('#tdBody'), stat = $('#tdStat');
+  if(!body) return;
+  if(!td.on){
+    body.innerHTML = '<p class="tip" style="margin:0 0 12px">粤语最难的一关——听发音猜声调。播放一个音节，从 4 个调值里选出正确的一个。声调选对了，粤语就学会了一半。</p>' +
+      '<button class="btn btn-primary" id="tdStart">🎯 开始训练（10 题）</button>';
+    const st = $('#tdStart'); if(st) st.onclick = () => { td = {on:true, i:0, correct:0, streak:0, best:0, total:10, answer:null, opts:[]}; tdNext(); };
+    if(stat) stat.textContent = '未开始';
+    return;
+  }
+  if(td.i >= td.total){
+    const pct = Math.round(td.correct / td.total * 100);
+    body.innerHTML = '<div class="td-done"><b>' + (pct >= 80 ? '🏆 犀利！' : pct >= 60 ? '👍 唔错！' : '💪 继续努力！') + '</b>' +
+      '<p>答对 ' + td.correct + ' / ' + td.total + ' 题 · 最高连击 ' + td.best + '</p>' +
+      '<button class="btn btn-primary" id="tdRestart">🔄 再来一轮</button></div>';
+    const rt = $('#tdRestart'); if(rt) rt.onclick = () => { td = {on:true, i:0, correct:0, streak:0, best:0, total:10, answer:null, opts:[]}; tdNext(); };
+    if(stat) stat.textContent = '完成 ' + pct + '%';
+    return;
+  }
+  const all = DATA.tones;
+  const ans = all[Math.floor(Math.random() * all.length)];
+  const others = all.filter(t => t.num !== ans.num).sort(() => Math.random() - 0.5).slice(0, 3);
+  const opts = [...others, ans].sort(() => Math.random() - 0.5);
+  td.answer = ans; td.opts = opts;
+  body.innerHTML = '<div class="td-q">第 ' + (td.i + 1) + ' / ' + td.total + ' 题</div>' +
+    '<button class="btn btn-primary td-play" id="tdPlay">🔊 听发音</button>' +
+    '<div class="td-opts">' + opts.map(o => '<button class="td-opt" data-num="' + o.num + '"><b>' + o.num + '</b><span>' + o.name + ' ' + o.contour + '</span></button>').join('') + '</div>' +
+    '<div class="td-fb" id="tdFb"></div>';
+  const pl = $('#tdPlay'); if(pl) pl.onclick = () => speak(ans.ex, {rate:0.65});
+  $$('#tdBody .td-opt').forEach(b => b.onclick = () => tdPick(b));
+  setTimeout(() => speak(ans.ex, {rate:0.65}), 350);
+  if(stat) stat.textContent = '已答 ' + td.i + '/' + td.total + ' · 对 ' + td.correct + (td.streak > 1 ? ' · 🔥' + td.streak : '');
+}
+function tdPick(btn){
+  const ok = btn.dataset.num === td.answer.num;
+  const fb = $('#tdFb');
+  const label = td.answer.num + ' ' + td.answer.name + ' ' + td.answer.contour + '（' + td.answer.ex + '）';
+  if(ok){ td.correct++; td.streak++; td.best = Math.max(td.best, td.streak); if(fb) fb.innerHTML = '<span class="td-ok">✅ 啱！' + label + '</span>'; }
+  else { td.streak = 0; if(fb) fb.innerHTML = '<span class="td-no">❌ 唔啱！正确答案是 ' + label + '</span>'; }
+  $$('#tdBody .td-opt').forEach(x => x.disabled = true);
+  td.i++;
+  setTimeout(() => { td.i >= td.total ? renderToneDrill() : tdNext(); }, 1100);
+}
+function tdNext(){ renderToneDrill(); }
+
 function renderPhonetics(){
   /* 更新计数 */
   $$('.ph-tab span')[0].textContent = DATA.initials.length;
   $$('.ph-tab span')[1].textContent = DATA.finals.length;
   $$('.ph-tab span')[2].textContent = DATA.tones.length;
   renderPhGrid();
+  renderToneDrill();
 }
 function renderPhGrid(){
   const q = ($('#phSearch').value || '').trim().toLowerCase();
@@ -665,8 +766,9 @@ function setPracticeTarget(it){
 }
 
 /* ================= 词汇 ================= */
-let vocabCat = DATA.vocabCategories[0].id, vocabFavOnly = false;
+let vocabCat = DATA.vocabCategories[0].id, vocabFavOnly = false, vocabReviewOnly = false;
 function renderVocab(){
+  updateReviewBtn();
   const pills = DATA.vocabCategories.map(c => `
     <button class="cat-pill ${c.id===vocabCat?'active':''}" data-cat="${c.id}">${c.icon} ${c.name} <small style="opacity:.7">${c.words.length}</small></button>`).join('');
   $('#catPills').innerHTML = pills;
@@ -680,8 +782,40 @@ function renderVocabGrid(){
   let words = cat.words;
   if(q) words = words.filter(w => (w.han + ' ' + w.jp + ' ' + w.mand + ' ' + w.ex).toLowerCase().includes(q));
   if(vocabFavOnly) words = words.filter(w => p && p.favorites.includes(cat.id + ':' + w.han));
+  if(vocabReviewOnly){
+    const due = reviewDueKeys().map(reviewWord).filter(Boolean);
+    words = due.map(x => ({...x.w, _cat:x.cat.id}));
+    if(!words.length){
+      $('#vocabGrid').innerHTML = '<div class="review-empty">🎉 待复习的词都清完啦！去学几个新词，明天再来。</div>';
+      updateReviewBtn();
+      return;
+    }
+  }
+  const reviewReveal = window.__reviewReveal || (window.__reviewReveal = {});
   $('#vocabGrid').innerHTML = words.map((w,idx) => {
-    const favKey = cat.id + ':' + w.han;
+    const favKey = (w._cat || cat.id) + ':' + w.han;
+    if(vocabReviewOnly){
+      const revealed = !!reviewReveal[favKey];
+      return `<div class="word-card review-card" data-key="${favKey}">
+      <div class="wc-top">
+        <div>
+          <div class="wc-han ${revealed?'':'quizzed'}">${revealed ? w.han : '❓'}</div>
+          <div class="wc-jp">${revealed ? w.jp : ''}</div>
+        </div>
+        <span class="chip chip-gold" style="font-size:10px">复习</span>
+      </div>
+      <div class="wc-mand">${revealed ? esc(w.mand) : '点击揭晓 · 回忆一下这个词'}</div>
+      <div class="wc-ex" style="${revealed?'':'display:none'}">
+        ${esc(w.ex)}
+        <div class="wx-jp">${w.exjp}</div>
+        <div class="wx-mand">${esc(w.exmand)}</div>
+      </div>
+      <div class="review-actions" style="${revealed?'':'display:none'}">
+        <button class="btn btn-red sm" data-remember="0">❌ 忘了</button>
+        <button class="btn btn-primary sm" data-remember="1">✅ 记得</button>
+      </div>
+    </div>`;
+    }
     const fav = p && p.favorites.includes(favKey);
     return `
     <div class="word-card" style="animation:pageIn .4s ${idx*0.02}s backwards">
@@ -704,6 +838,24 @@ function renderVocabGrid(){
     </div>`;
   }).join('') || '<div class="history-empty" style="grid-column:1/-1">没有匹配的词汇</div>';
 
+  if(vocabReviewOnly){
+    $$('#vocabGrid .word-card').forEach(card => {
+      const key = card.dataset.key;
+      card.onclick = () => {
+        const rv = window.__reviewReveal;
+        if(!rv[key]){ rv[key] = true; renderVocabGrid(); }
+      };
+      $$('.review-actions button', card).forEach(b => b.onclick = e => {
+        e.stopPropagation();
+        reviewAnswer(key, b.dataset.remember === '1');
+        const rv = window.__reviewReveal; delete rv[key];
+        renderVocabGrid();
+        toast(b.dataset.remember === '1' ? '记得！' + reviewBoxGap(key) + ' 天后再复习' : '忘了也没关系，明天再复习');
+      });
+    });
+    updateReviewBtn();
+    return;
+  }
   $$('#vocabGrid .word-card').forEach((card, i) => {
     const w = words[i];
     const playBtn = $('.wc-play', card);
@@ -728,10 +880,57 @@ function renderVocabGrid(){
     };
   });
 }
+
+/* ================= SRS 间隔复习（轻量 SM-2 五盒） ================= */
+function reviewDueKeys(){
+  const p = getProgress(); if(!p || !p.reviews) return [];
+  const today = todayKey();
+  return Object.keys(p.reviews).filter(k => p.reviews[k].due <= today);
+}
+function reviewDueCount(){ return reviewDueKeys().length; }
+function reviewWord(key){
+  /* key = 'catId:han'，解析回词汇对象 */
+  const idx = key.indexOf(':');
+  const catId = key.slice(0, idx), han = key.slice(idx + 1);
+  const cat = DATA.vocabCategories.find(c => c.id === catId);
+  if(!cat) return null;
+  const w = cat.words.find(x => x.han === han);
+  return w ? {cat, w} : null;
+}
+function reviewBoxGap(key){
+  const p = getProgress(); if(!p || !p.reviews || !p.reviews[key]) return 2;
+  return (p.reviews[key].box || 1) * 2;
+}
+function updateReviewBtn(){
+  const n = reviewDueCount();
+  const btn = $('#reviewBtn');
+  if(btn) btn.textContent = n > 0 ? '📅 待复习 (' + n + ')' : '📅 待复习';
+}
+function reviewAnswer(key, remembered){
+  const p = getProgress(); if(!p) return;
+  p.reviews = p.reviews || {};
+  const today = todayKey();
+  const r = p.reviews[key] || {box:1, due:today};
+  if(remembered){
+    r.box = Math.min((r.box || 1) + 1, 5);
+    const gap = (r.box || 1) * 2; /* 2/4/6/8/10 天递增 */
+    const due = new Date(); due.setDate(due.getDate() + gap);
+    r.due = due.toISOString().slice(0,10);
+  } else {
+    r.box = 1;
+    const due = new Date(); due.setDate(due.getDate() + 1);
+    r.due = due.toISOString().slice(0,10);
+  }
+  p.reviews[key] = r;
+  saveProgress(p);
+}
+
 function markWordLearned(catId, w){
   const p = getProgress(); if(!p) return;
   const key = catId + ':' + w.han;
   if(!p.learned.includes(key)) p.learned.push(key);
+  p.reviews = p.reviews || {};
+  if(!p.reviews[key]) p.reviews[key] = {box:1, due:todayKey()};
   const today = todayKey();
   if(p.goalDate !== today){ p.goalDate = today; p.goalToday = 0; p.goalWords = []; }
   p.goalWords = p.goalWords || [];
@@ -752,58 +951,93 @@ function toggleFav(catId, w, card){
 }
 
 /* 听力小测 */
+/* 最小对立词集：同音节不同调，练声调听辨 */
+const MINIMAL_PAIRS = [
+  {group:[{han:'詩',jp:'si1'},{han:'史',jp:'si2'},{han:'試',jp:'si3'},{han:'時',jp:'si4'}], mand:'诗/史/试/时'},
+  {group:[{han:'夫',jp:'fu1'},{han:'苦',jp:'fu2'},{han:'富',jp:'fu3'},{han:'婦',jp:'fu5'}], mand:'夫/苦/富/妇'},
+  {group:[{han:'衣',jp:'ji1'},{han:'椅',jp:'ji2'},{han:'意',jp:'ji3'}], mand:'衣/椅/意'},
+  {group:[{han:'家',jp:'gaa1'},{han:'假',jp:'gaa2'},{han:'嫁',jp:'gaa3'}], mand:'家/假/嫁'},
+  {group:[{han:'包',jp:'baau1'},{han:'飽',jp:'baau2'},{han:'豹',jp:'baau3'}], mand:'包/饱/豹'},
+  {group:[{han:'色',jp:'sik1'},{han:'錫',jp:'sik3'},{han:'食',jp:'sik6'}], mand:'色/锡/食（入声）'},
+];
 function openQuiz(){
   const p = getProgress();
   const all = DATA.vocabCategories.flatMap(c => c.words.map(w => ({...w, cat:c.name})));
-  const pool = [...all].sort(() => Math.random() - 0.5).slice(0, 8);
+  /* 混合题型：4 听词选义 + 3 最小对立 + 3 声调听辨 */
+  const qs = [];
+  const meaningPool = [...all].sort(() => Math.random() - 0.5);
+  for(let i = 0; i < 4 && meaningPool.length; i++){
+    const w = meaningPool.pop();
+    qs.push({type:'meaning', opts: shuffleOpts(w, all), answer: w, label: w.mand + '（' + w.han + '）', play: () => speak(w.han)});
+  }
+  const pairs = [...MINIMAL_PAIRS].sort(() => Math.random() - 0.5);
+  for(let i = 0; i < 3 && pairs.length; i++){
+    const g = pairs.pop();
+    const target = g.group[Math.floor(Math.random() * g.group.length)];
+    qs.push({type:'pair', opts: [...g.group].sort(() => Math.random() - 0.5), answer: target, label: target.han + ' ' + target.jp + '（' + g.mand + '）', play: () => speak(target.han, {rate:0.7})});
+  }
+  const tones = [...DATA.tones].sort(() => Math.random() - 0.5);
+  for(let i = 0; i < 3 && tones.length; i++){
+    const t = tones.pop();
+    const others = DATA.tones.filter(x => x.num !== t.num).sort(() => Math.random() - 0.5).slice(0, 3);
+    qs.push({type:'tone', opts: [...others, t].sort(() => Math.random() - 0.5), answer: t, label: t.num + ' ' + t.name + ' ' + t.contour + '（' + t.ex + '）', play: () => speak(t.ex, {rate:0.7})});
+  }
+  const pool = qs.sort(() => Math.random() - 0.5);
   let qi = 0, score = 0;
+  const isRight = (q, picked) => q.type==='meaning' ? picked.mand===q.answer.mand : q.type==='pair' ? picked.han===q.answer.han : picked.num===q.answer.num;
+  const isAnswerOpt = (q, picked) => q.type==='meaning' ? picked.mand===q.answer.mand : q.type==='pair' ? picked.han===q.answer.han : picked.num===q.answer.num;
   const renderQ = () => {
     if(qi >= pool.length) return renderEnd();
-    const w = pool[qi];
-    const opts = shuffleOpts(w, all);
-    modalRoot.innerHTML = `
-      <div class="modal-mask" id="qMask"><div class="modal">
-        <h3>📝 听力小测 <span class="chip chip-gold" style="margin-left:auto">${qi+1} / ${pool.length}</span><button id="qCloseX" style="border:none;background:none;font-size:18px;cursor:pointer;color:var(--ink-3);padding:2px 6px" title="关闭">✕</button></h3>
-        <div class="quiz-q">🔊 听发音</div>
-        <div class="quiz-jp">（点击播放，猜猜是哪个意思）</div>
-        <div style="text-align:center;margin:6px 0 18px">
-          <button class="btn btn-primary" id="qPlay">🔊 播放</button>
-          <button class="btn btn-ghost" id="qReplay">↻ 重听</button>
-        </div>
-        ${opts.map((o,i) => `<button class="quiz-opt" data-opt="${i}">${i+1}. ${esc(o.mand)}</button>`).join('')}
-        <div class="quiz-progress">答对 ${score} 题 · 已过 ${qi} 题</div>
-      </div></div>`;
+    const q = pool[qi];
+    const typeTag = q.type==='meaning' ? '听词选义' : q.type==='pair' ? '最小对立' : '声调听辨';
+    const hint = q.type==='meaning' ? '（猜猜是哪个意思）' : q.type==='pair' ? '（听清声调，选出听到的字）' : '（听发音，猜是哪个调）';
+    const optsHtml = q.type==='meaning'
+      ? q.opts.map((o,i) => '<button class="quiz-opt" data-opt="' + i + '">' + (i+1) + '. ' + esc(o.mand) + '</button>').join('')
+      : q.type==='pair'
+        ? q.opts.map((o,i) => '<button class="quiz-opt" data-opt="' + i + '"><b style="font-size:24px">' + o.han + '</b><span style="color:var(--ink-3);font-size:12px">' + o.jp + '</span></button>').join('')
+        : q.opts.map((o,i) => '<button class="quiz-opt" data-opt="' + i + '"><b>' + o.num + '</b> · ' + o.name + ' ' + o.contour + '</button>').join('');
+    modalRoot.innerHTML = '<div class="modal-mask" id="qMask"><div class="modal">' +
+      '<h3>📝 听力小测 <span class="chip chip-gold" style="margin-left:auto">' + typeTag + '</span><span class="chip" style="margin-left:6px">' + (qi+1) + ' / ' + pool.length + '</span><button id="qCloseX" style="border:none;background:none;font-size:18px;cursor:pointer;color:var(--ink-3);padding:2px 6px" title="关闭">✕</button></h3>' +
+      '<div class="quiz-q">🔊 听发音</div>' +
+      '<div class="quiz-jp">' + hint + '</div>' +
+      '<div style="text-align:center;margin:6px 0 18px">' +
+        '<button class="btn btn-primary" id="qPlay">🔊 播放</button>' +
+        '<button class="btn btn-ghost" id="qReplay">↻ 重听</button>' +
+      '</div>' +
+      optsHtml +
+      '<div class="quiz-progress">答对 ' + score + ' 题 · 已过 ' + qi + ' 题</div>' +
+    '</div></div>';
     $('#qCloseX').onclick = () => { modalRoot.innerHTML = ''; };
     $('#qMask').addEventListener('click', e => { if(e.target.id === 'qMask') modalRoot.innerHTML = ''; });
-    $('#qPlay').onclick = () => speak(w.han);
-    $('#qReplay').onclick = () => speak(w.han);
-    speak(w.han);
+    $('#qPlay').onclick = q.play;
+    $('#qReplay').onclick = q.play;
+    q.play();
     $$('#modalRoot .quiz-opt').forEach(b => b.onclick = () => {
-      const correct = opts[+b.dataset.opt].mand === w.mand;
+      const picked = q.opts[+b.dataset.opt];
+      const correct = isRight(q, picked);
       $$('#modalRoot .quiz-opt').forEach(x => {
         x.disabled = true;
-        const isC = opts[+x.dataset.opt].mand === w.mand;
-        x.classList.add(isC?'correct':'wrong');
-        if(isC) x.textContent = x.textContent + ' ✓';
+        const px = q.opts[+x.dataset.opt];
+        if(isAnswerOpt(q, px)) x.classList.add('correct');
+        else x.classList.add('wrong');
       });
       if(correct){ score++; toast('答啱咗！犀利 👍'); }
-      else toast('正确答案：' + w.mand);
-      setTimeout(() => { qi++; renderQ(); }, 1300);
+      else toast('正确答案：' + q.label);
+      setTimeout(() => { qi++; renderQ(); }, 1400);
     });
   };
   const renderEnd = () => {
     const pct = Math.round(score/pool.length*100);
-    logPractice('听力小测', vocabCatName(), pct);
-    modalRoot.innerHTML = `
-      <div class="modal-mask"><div class="modal">
-        <div class="quiz-end">
-          <div style="font-size:40px">${pct>=80?'🏆':pct>=60?'💪':'📚'}</div>
-          <div class="qe-score">${score} / ${pool.length}</div>
-          <p class="qe-txt">${pct>=80?'好犀利！粤语听力达人！':pct>=60?'唔错！继续加油！':'再听多几次，慢慢来～'}</p>
-          <button class="btn btn-primary" id="qAgain">🔁 再来一轮</button>
-          <button class="btn btn-ghost" id="qClose" style="margin-left:8px">关闭</button>
-        </div>
-      </div></div>`;
+    logPractice('听力小测', '混合题型', pct);
+    modalRoot.innerHTML = '<div class="modal-mask"><div class="modal">' +
+      '<div class="quiz-end">' +
+        '<div style="font-size:40px">' + (pct>=80?'🏆':pct>=60?'💪':'📚') + '</div>' +
+        '<div class="qe-score">' + score + ' / ' + pool.length + '</div>' +
+        '<p class="qe-txt">' + (pct>=80?'好犀利！粤语听力达人！':pct>=60?'唔错！继续加油！':'再听多几次，慢慢来～') + '</p>' +
+        '<button class="btn btn-primary" id="qAgain">🔁 再来一轮</button>' +
+        '<button class="btn btn-ghost" id="qClose" style="margin-left:8px">关闭</button>' +
+      '</div>' +
+    '</div></div>';
     $('#qAgain').onclick = () => openQuiz();
     $('#qClose').onclick = () => { modalRoot.innerHTML = ''; };
   };
@@ -1310,7 +1544,8 @@ function bindGlobal(){
   $('#ptPlayback').onclick = () => { if(audioEl && recordedUrl) audioEl.play(); };
   /* 词汇页 */
   $('#vocabSearch').addEventListener('input', renderVocabGrid);
-  $('#favFilter').onclick = () => { vocabFavOnly = !vocabFavOnly; $('#favFilter').classList.toggle('chip-red', vocabFavOnly); renderVocabGrid(); };
+  $('#favFilter').onclick = () => { vocabFavOnly = !vocabFavOnly; vocabReviewOnly = false; $('#favFilter').classList.toggle('chip-red', vocabFavOnly); $('#reviewBtn').classList.remove('active'); renderVocabGrid(); };
+  $('#reviewBtn').onclick = () => { vocabReviewOnly = !vocabReviewOnly; vocabFavOnly = false; $('#reviewBtn').classList.toggle('active', vocabReviewOnly); $('#favFilter').classList.remove('chip-red'); renderVocab(); updateReviewBtn(); };
   $('#favPlayAll').onclick = () => {
     const cat = DATA.vocabCategories.find(c=>c.id===vocabCat);
     cat.words.forEach((w,i) => setTimeout(() => speak(w.han, {queue:true}), i * 1400));
@@ -1569,10 +1804,10 @@ function bindSing(){
   if(songInput) songInput.oninput = e => { songQuery = e.target.value.trim().toLowerCase(); renderSing(); };
   const sfAll = $('#songFilterAll');
   if(sfAll) sfAll.onclick = () => { songFilter='all'; updateSongFilterUI(); renderSing(); };
-  $('[data-sf]').forEach(b => b.onclick = () => { songFilter = b.dataset.sf; updateSongFilterUI(); renderSing(); });
+  $$('[data-sf]').forEach(b => b.onclick = () => { songFilter = b.dataset.sf; updateSongFilterUI(); renderSing(); });
   function updateSongFilterUI(){
     const a = $('#songFilterAll'); if(a) a.classList.toggle('active', songFilter==='all');
-    $('[data-sf]').forEach(b => b.classList.toggle('active', b.dataset.sf===songFilter));
+    $$('[data-sf]').forEach(b => b.classList.toggle('active', b.dataset.sf===songFilter));
   }
   $('#spImport').onclick = () => $('#spFile').click();
   $('#spFile').onchange = e => {

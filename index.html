@@ -152,6 +152,11 @@
       </div>
       <div class="ph-grid" id="phGrid"></div>
 
+      <div class="card tone-drill" id="toneDrill">
+        <div class="card-head"><h3>🎯 声调听辨训练</h3><span class="chip chip-gold" id="tdStat">未开始</span></div>
+        <div class="td-body" id="tdBody"></div>
+      </div>
+
       <div class="card practice-card" id="practiceCard">
         <div class="card-head"><h3>🎤 发音练习台</h3><span class="chip chip-green" id="practiceStatus">选择卡片开始</span></div>
         <div class="practice-main">
@@ -163,6 +168,7 @@
             <button class="btn btn-primary" id="ptDemo">🔊 听标准音</button>
             <button class="btn btn-red" id="ptRecord">● 开始录音</button>
             <button class="btn btn-ghost" id="ptPlayback" disabled>▶ 播放我的录音</button>
+            <div class="vu-wrap" title="实时音量"><div class="vu-bar" id="vuBar"></div></div>
           </div>
           <div class="practice-feedback" id="ptFeedback"></div>
         </div>
@@ -184,6 +190,7 @@
         <input class="search" id="vocabSearch" placeholder="搜索粤语 / 粤拼 / 普通话，如 饮茶 / sik6…">
         <div class="ph-tools">
           <button class="btn btn-ghost sm" id="favFilter">☆ 只看收藏</button>
+          <button class="btn btn-ghost sm" id="reviewBtn">📅 待复习</button>
           <button class="btn btn-ghost sm" id="favPlayAll">▶ 朗读本类全部</button>
         </div>
       </div>
