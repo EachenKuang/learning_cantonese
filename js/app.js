@@ -14,6 +14,73 @@ const todayKey = () => {
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 const modalRoot = $('#modalRoot');
 const audioEl = new Audio();
+
+/* ===== 通用模态框：焦点陷阱 / Esc 关闭 / 背景 inert（控件优化清单 P0-1） ===== */
+let modalPrevFocus = null, modalCloseCb = null;
+function modalFocusables(root){
+  const els = $$('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])', root || document);
+  return els.filter(el => !el.disabled);
+}
+function setModalInert(on){
+  const skip = new Set(['modalRoot','toast']);
+  [...document.body.children].forEach(el => {
+    if(skip.has(el.id)) return;
+    try{ el.inert = on; }catch(e){}
+  });
+}
+function openModal(html, opts){
+  opts = opts || {};
+  if(!opts.label){
+    const m = String(html).match(/<h3[^>]*>([^<]{1,40})/);
+    if(m) opts.label = m[1].replace(/<[^>]+>/g,'').trim();
+  }
+  if(!modalRoot.children.length) modalPrevFocus = document.activeElement;
+  modalRoot.innerHTML = '<div class="modal-mask"><div class="modal' + (opts.cls ? ' ' + opts.cls : '') + '" role="dialog" aria-modal="true"' +
+    (opts.label ? ' aria-label="' + opts.label + '"' : '') + '>' + html + '</div></div>';
+  modalCloseCb = opts.onClose || null;
+  setModalInert(true);
+  const f = modalFocusables($('.modal', modalRoot));
+  (f[0] || $('.modal', modalRoot) || modalRoot).focus();
+  return closeModal;
+}
+function closeModal(){
+  if(!modalRoot.children.length) return;
+  modalRoot.innerHTML = '';
+  setModalInert(false);
+  if(modalPrevFocus && modalPrevFocus.focus){ try{ modalPrevFocus.focus(); }catch(e){} }
+  modalPrevFocus = null;
+  const cb = modalCloseCb; modalCloseCb = null;
+  if(cb) cb();
+}
+/* 全局委托：Esc 关闭 + Tab 焦点陷阱 + 点击遮罩关闭（弹层内容重建也生效） */
+document.addEventListener('keydown', e => {
+  if(!modalRoot.children.length) return;
+  if(e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); closeModal(); return; }
+  if(e.key === 'Tab'){
+    const dlg = $('.modal', modalRoot); if(!dlg) return;
+    const f = modalFocusables(dlg);
+    if(!f.length){ e.preventDefault(); return; }
+    const i = f.indexOf(document.activeElement);
+    let ni;
+    if(i < 0) ni = e.shiftKey ? f.length - 1 : 0;
+    else ni = (i + (e.shiftKey ? -1 : 1) + f.length) % f.length;
+    e.preventDefault();
+    f[ni].focus();
+  }
+});
+document.addEventListener('click', e => {
+  if(!modalRoot.children.length) return;
+  if(e.target && e.target.classList && e.target.classList.contains('modal-mask')) closeModal();
+});
+/* 按钮防重入（TTS 加载中禁用，控件优化清单 P2-9） */
+function guardBtn(btn){
+  if(!btn || btn.dataset.pending === '1') return false;
+  btn.dataset.pending = '1';
+  const oldT = btn.textContent, oldDis = btn.disabled;
+  btn.disabled = true; btn.textContent = '⏳ 加载中…';
+  setTimeout(() => { btn.disabled = oldDis; btn.textContent = oldT; btn.dataset.pending = ''; }, 3200);
+  return true;
+}
 /* 粤拼去掉调号数字，仅作显示用（如 baa1 → baa） */
 const jq = s => String(s).replace(/[0-9]/g,'').trim();
 
@@ -437,7 +504,7 @@ function startRecord(){
     chunks = [];
     mediaRecorder.start();
     const btn = $('#ptRecord');
-    if(btn){ btn.textContent = '⏹ 停止录音'; btn.classList.add('recording'); }
+    if(btn){ btn.textContent = '⏹ 停止录音'; btn.classList.add('recording'); btn.setAttribute('aria-pressed','true'); btn.setAttribute('aria-label','正在录音，点击停止'); }
     $('#practiceStatus').textContent = '🔴 录音中，请跟着念…';
     if(vuRaf) cancelAnimationFrame(vuRaf);
     vuRaf = requestAnimationFrame(vuLoop);
@@ -450,7 +517,7 @@ function stopRecord(){
   if(vuRaf){ cancelAnimationFrame(vuRaf); vuRaf = 0; }
   const bar = document.getElementById('vuBar'); if(bar) bar.style.width = '0%';
   const btn = $('#ptRecord');
-  if(btn){ btn.textContent = '● 重新录音'; btn.classList.remove('recording'); }
+  if(btn){ btn.textContent = '● 重新录音'; btn.classList.remove('recording'); btn.setAttribute('aria-pressed','false'); btn.setAttribute('aria-label','重新录音'); }
 }
 /* 音频分析：时长 + 响度 */
 async function analyzeBlob(blob){
@@ -510,13 +577,13 @@ function renderFeedback(res, target, container){
         <div style="width:100%">
           <div style="font-size:13px;font-weight:700;margin-bottom:7px">🎧 我的录音 vs 标准音</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-ghost sm" id="fbPlay">▶ 播放我的录音</button>
-            <button class="btn btn-ghost sm" id="fbDemo">🔊 再听标准音</button>
+            <button type="button" class="btn btn-ghost sm" id="fbPlay">▶ 播放我的录音</button>
+            <button type="button" class="btn btn-ghost sm" id="fbDemo">🔊 再听标准音</button>
           </div>
           <div style="margin-top:12px;font-size:12.5px;color:var(--ink-2)">听对比后自查声调：</div>
           <div style="display:flex;gap:8px;margin-top:6px">
-            <button class="btn btn-soft sm ${toneSel===true?'chip-red':''}" id="fbToneOk">✓ 我读啱咗</button>
-            <button class="btn btn-ghost sm ${toneSel===false?'chip-red':''}" id="fbToneBad">✗ 声调唔啱</button>
+            <button type="button" class="btn btn-soft sm ${toneSel===true?'chip-red':''}" id="fbToneOk">✓ 我读啱咗</button>
+            <button type="button" class="btn btn-ghost sm ${toneSel===false?'chip-red':''}" id="fbToneBad">✗ 声调唔啱</button>
           </div>
         </div>
         <div style="width:100%">💡 ${esc(tips.join('；'))}</div>
@@ -553,8 +620,8 @@ function navigate(route, options={}){
   $$('.page').forEach(p => p.classList.remove('active'));
   const page = $('#page-' + route);
   if(page) page.classList.add('active');
-  $$('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.nav === route));
-  $$('.m-nav-item').forEach(n => n.classList.toggle('active', n.dataset.nav === route));
+  $$('.nav-item').forEach(n => { const on = n.dataset.nav === route; n.classList.toggle('active', on); if(on) n.setAttribute('aria-current','page'); else n.removeAttribute('aria-current'); });
+  $$('.m-nav-item').forEach(n => { const on = n.dataset.nav === route; n.classList.toggle('active', on); if(on) n.setAttribute('aria-current','page'); else n.removeAttribute('aria-current'); });
   const more = $('#mMore');
   if(more) more.classList.toggle('active', ['sing','grammar','culture'].includes(route));
   window.scrollTo({top:0});
@@ -612,7 +679,7 @@ function renderHome(){
     const re = $('#reviewEntry');
     if(re) re.onclick = () => { vocabReviewOnly = true; navigate('vocab'); };
     $('#continueList').innerHTML = reviewEntry + (acts.length ? acts.map(a => `
-      <button class="cont-item" data-nav="${a.route}">
+      <button type="button" class="cont-item" data-nav="${a.route}">
         <span class="ci-ico">${esc(a.icon)}</span>
         <div><div class="ci-title">${esc(a.title)}</div><div class="ci-sub">${esc(a.sub)}</div></div>
         <span class="ci-arrow">→</span>
@@ -630,7 +697,7 @@ function renderHome(){
     {ico:'📊', t:'学习档案', d:'目标 · 打卡 · 收藏 · 练习历史 · 本机备份', nav:'profile'},
   ];
   $('#moduleGrid').innerHTML = mods.map(m => `
-    <button class="mod-card" data-nav="${m.nav}">
+    <button type="button" class="mod-card" data-nav="${m.nav}">
       <div class="mc-ico">${m.ico}</div>
       <h3>${m.t}</h3><p>${m.d}</p><span class="mc-go">进入 →</span>
     </button>`).join('');
@@ -676,7 +743,7 @@ function renderToneDrill(){
   if(!body) return;
   if(!td.on){
     body.innerHTML = '<p class="tip" style="margin:0 0 12px">粤语最难的一关——听发音猜声调。播放一个音节，从 4 个调值里选出正确的一个。声调选对了，粤语就学会了一半。</p>' +
-      '<button class="btn btn-primary" id="tdStart">🎯 开始训练（10 题）</button>';
+      '<button type="button" class="btn btn-primary" id="tdStart">🎯 开始训练（10 题）</button>';
     const st = $('#tdStart'); if(st) st.onclick = () => { td = {on:true, i:0, correct:0, streak:0, best:0, total:10, answer:null, opts:[]}; tdNext(); };
     if(stat) stat.textContent = '未开始';
     return;
@@ -685,7 +752,7 @@ function renderToneDrill(){
     const pct = Math.round(td.correct / td.total * 100);
     body.innerHTML = '<div class="td-done"><b>' + (pct >= 80 ? '🏆 犀利！' : pct >= 60 ? '👍 唔错！' : '💪 继续努力！') + '</b>' +
       '<p>答对 ' + td.correct + ' / ' + td.total + ' 题 · 最高连击 ' + td.best + '</p>' +
-      '<button class="btn btn-primary" id="tdRestart">🔄 再来一轮</button></div>';
+      '<button type="button" class="btn btn-primary" id="tdRestart">🔄 再来一轮</button></div>';
     const rt = $('#tdRestart'); if(rt) rt.onclick = () => { td = {on:true, i:0, correct:0, streak:0, best:0, total:10, answer:null, opts:[]}; tdNext(); };
     if(stat) stat.textContent = '完成 ' + pct + '%';
     return;
@@ -696,8 +763,8 @@ function renderToneDrill(){
   const opts = [...others, ans].sort(() => Math.random() - 0.5);
   td.answer = ans; td.opts = opts;
   body.innerHTML = '<div class="td-q">第 ' + (td.i + 1) + ' / ' + td.total + ' 题</div>' +
-    '<button class="btn btn-primary td-play" id="tdPlay">🔊 听发音</button>' +
-    '<div class="td-opts">' + opts.map(o => '<button class="td-opt" data-num="' + o.num + '"><b>' + o.num + '</b><span>' + o.name + ' ' + o.contour + '</span></button>').join('') + '</div>' +
+    '<button type="button" class="btn btn-primary td-play" id="tdPlay">🔊 听发音</button>' +
+    '<div class="td-opts">' + opts.map(o => '<button type="button" class="td-opt" data-num="' + o.num + '"><b>' + o.num + '</b><span>' + o.name + ' ' + o.contour + '</span></button>').join('') + '</div>' +
     '<div class="td-fb" id="tdFb"></div>';
   const pl = $('#tdPlay'); if(pl) pl.onclick = () => speak(ans.ex, {rate:0.65});
   $$('#tdBody .td-opt').forEach(b => b.onclick = () => tdPick(b));
@@ -732,7 +799,7 @@ function renderPhGrid(){
   else items = DATA.tones.map(t => ({sym:t.num, sub:t.contour, ex:t.ex, exjp:t.exjp, tone:t}));
   if(q) items = items.filter(i => (i.sym+qString(i)).toLowerCase().includes(q));
   $('#phGrid').innerHTML = items.map((it,idx) => `
-    <button class="ph-card ${phSel && phSel.sym===it.sym && phSel.tab===phTab?'sel':''}" data-idx="${idx}" style="animation:pageIn .4s ${idx*0.015}s backwards" aria-label="播放 ${esc(it.sym)}，例字 ${esc(it.ex)}">
+    <button type="button" class="ph-card ${phSel && phSel.sym===it.sym && phSel.tab===phTab?'sel':''}" data-idx="${idx}" style="animation:pageIn .4s ${idx*0.015}s backwards" aria-label="播放 ${esc(it.sym)}，例字 ${esc(it.ex)}">
       <span class="pc-vol">🔊</span>
       <div class="pc-sym">${it.sym}</div>
       <div class="pc-jp">${it.sub}</div>
@@ -770,9 +837,9 @@ let vocabCat = DATA.vocabCategories[0].id, vocabFavOnly = false, vocabReviewOnly
 function renderVocab(){
   updateReviewBtn();
   const pills = DATA.vocabCategories.map(c => `
-    <button class="cat-pill ${c.id===vocabCat?'active':''}" data-cat="${c.id}">${c.icon} ${c.name} <small style="opacity:.7">${c.words.length}</small></button>`).join('');
+    <button type="button" class="cat-pill ${c.id===vocabCat?'active':''}" data-cat="${c.id}" aria-pressed="${c.id===vocabCat?'true':'false'}">${c.icon} ${c.name} <small style="opacity:.7">${c.words.length}</small></button>`).join('');
   $('#catPills').innerHTML = pills;
-  $$('#catPills .cat-pill').forEach(b => b.onclick = () => { vocabCat = b.dataset.cat; renderVocabGrid(); renderVocab(); });
+  $$('#catPills .cat-pill').forEach(b => b.onclick = () => { vocabCat = b.dataset.cat; $$('#catPills .cat-pill').forEach(x=>x.setAttribute('aria-pressed', x.dataset.cat===vocabCat?'true':'false')); renderVocabGrid(); renderVocab(); });
   renderVocabGrid();
 }
 function renderVocabGrid(){
@@ -811,8 +878,8 @@ function renderVocabGrid(){
         <div class="wx-mand">${esc(w.exmand)}</div>
       </div>
       <div class="review-actions" style="${revealed?'':'display:none'}">
-        <button class="btn btn-red sm" data-remember="0">❌ 忘了</button>
-        <button class="btn btn-primary sm" data-remember="1">✅ 记得</button>
+        <button type="button" class="btn btn-red sm" data-remember="0">❌ 忘了</button>
+        <button type="button" class="btn btn-primary sm" data-remember="1">✅ 记得</button>
       </div>
     </div>`;
     }
@@ -824,17 +891,17 @@ function renderVocabGrid(){
           <div class="wc-han">${w.han}</div>
           <div class="wc-jp">${w.jp}</div>
         </div>
-        <button class="wc-fav ${fav?'on':''}" title="收藏">${fav?'★':'☆'}</button>
+        <button type="button" class="wc-fav ${fav?'on':''}" title="收藏">${fav?'★':'☆'}</button>
       </div>
       <div class="wc-mand">${esc(w.mand)}</div>
       <div class="wc-ex">
         ${esc(w.ex)}
-        <button class="wc-explay" title="朗读例句">🔊</button>
+        <button type="button" class="wc-explay" title="朗读例句">🔊</button>
         <div class="wx-jp">${w.exjp}</div>
         <div class="wx-mand">${esc(w.exmand)}</div>
       </div>
       <div class="wc-bottom"><span class="wc-cat">${cat.icon} ${cat.name}</span></div>
-      <button class="wc-play" title="听发音">▶</button>
+      <button type="button" class="wc-play" title="听发音">▶</button>
     </div>`;
   }).join('') || '<div class="history-empty" style="grid-column:1/-1">没有匹配的词汇</div>';
 
@@ -992,23 +1059,21 @@ function openQuiz(){
     const typeTag = q.type==='meaning' ? '听词选义' : q.type==='pair' ? '最小对立' : '声调听辨';
     const hint = q.type==='meaning' ? '（猜猜是哪个意思）' : q.type==='pair' ? '（听清声调，选出听到的字）' : '（听发音，猜是哪个调）';
     const optsHtml = q.type==='meaning'
-      ? q.opts.map((o,i) => '<button class="quiz-opt" data-opt="' + i + '">' + (i+1) + '. ' + esc(o.mand) + '</button>').join('')
+      ? q.opts.map((o,i) => '<button type="button" class="quiz-opt" data-opt="' + i + '">' + (i+1) + '. ' + esc(o.mand) + '</button>').join('')
       : q.type==='pair'
-        ? q.opts.map((o,i) => '<button class="quiz-opt" data-opt="' + i + '"><b style="font-size:24px">' + o.han + '</b><span style="color:var(--ink-3);font-size:12px">' + o.jp + '</span></button>').join('')
-        : q.opts.map((o,i) => '<button class="quiz-opt" data-opt="' + i + '"><b>' + o.num + '</b> · ' + o.name + ' ' + o.contour + '</button>').join('');
-    modalRoot.innerHTML = '<div class="modal-mask" id="qMask"><div class="modal">' +
-      '<h3>📝 听力小测 <span class="chip chip-gold" style="margin-left:auto">' + typeTag + '</span><span class="chip" style="margin-left:6px">' + (qi+1) + ' / ' + pool.length + '</span><button id="qCloseX" style="border:none;background:none;font-size:18px;cursor:pointer;color:var(--ink-3);padding:2px 6px" title="关闭">✕</button></h3>' +
+        ? q.opts.map((o,i) => '<button type="button" class="quiz-opt" data-opt="' + i + '"><b style="font-size:24px">' + o.han + '</b><span style="color:var(--ink-3);font-size:12px">' + o.jp + '</span></button>').join('')
+        : q.opts.map((o,i) => '<button type="button" class="quiz-opt" data-opt="' + i + '"><b>' + o.num + '</b> · ' + o.name + ' ' + o.contour + '</button>').join('');
+    openModal(
+      '<h3>📝 听力小测 <span class="chip chip-gold" style="margin-left:auto">' + typeTag + '</span><span class="chip" style="margin-left:6px">' + (qi+1) + ' / ' + pool.length + '</span><button type="button" id="qCloseX" style="border:none;background:none;font-size:18px;cursor:pointer;color:var(--ink-3);padding:2px 6px" title="关闭">✕</button></h3>' +
       '<div class="quiz-q">🔊 听发音</div>' +
       '<div class="quiz-jp">' + hint + '</div>' +
       '<div style="text-align:center;margin:6px 0 18px">' +
-        '<button class="btn btn-primary" id="qPlay">🔊 播放</button>' +
-        '<button class="btn btn-ghost" id="qReplay">↻ 重听</button>' +
+        '<button type="button" class="btn btn-primary" id="qPlay">🔊 播放</button>' +
+        '<button type="button" class="btn btn-ghost" id="qReplay">↻ 重听</button>' +
       '</div>' +
       optsHtml +
-      '<div class="quiz-progress">答对 ' + score + ' 题 · 已过 ' + qi + ' 题</div>' +
-    '</div></div>';
-    $('#qCloseX').onclick = () => { modalRoot.innerHTML = ''; };
-    $('#qMask').addEventListener('click', e => { if(e.target.id === 'qMask') modalRoot.innerHTML = ''; });
+      '<div class="quiz-progress">答对 ' + score + ' 题 · 已过 ' + qi + ' 题</div>');
+    $('#qCloseX').onclick = closeModal;
     $('#qPlay').onclick = q.play;
     $('#qReplay').onclick = q.play;
     q.play();
@@ -1029,17 +1094,16 @@ function openQuiz(){
   const renderEnd = () => {
     const pct = Math.round(score/pool.length*100);
     logPractice('听力小测', '混合题型', pct);
-    modalRoot.innerHTML = '<div class="modal-mask"><div class="modal">' +
+    openModal(
       '<div class="quiz-end">' +
         '<div style="font-size:40px">' + (pct>=80?'🏆':pct>=60?'💪':'📚') + '</div>' +
         '<div class="qe-score">' + score + ' / ' + pool.length + '</div>' +
         '<p class="qe-txt">' + (pct>=80?'好犀利！粤语听力达人！':pct>=60?'唔错！继续加油！':'再听多几次，慢慢来～') + '</p>' +
-        '<button class="btn btn-primary" id="qAgain">🔁 再来一轮</button>' +
-        '<button class="btn btn-ghost" id="qClose" style="margin-left:8px">关闭</button>' +
-      '</div>' +
-    '</div></div>';
+        '<button type="button" class="btn btn-primary" id="qAgain">🔁 再来一轮</button>' +
+        '<button type="button" class="btn btn-ghost" id="qClose" style="margin-left:8px">关闭</button>' +
+      '</div>', {label:'听力小测结果'});
     $('#qAgain').onclick = () => openQuiz();
-    $('#qClose').onclick = () => { modalRoot.innerHTML = ''; };
+    $('#qClose').onclick = closeModal;
   };
   renderQ();
 }
@@ -1058,7 +1122,7 @@ function renderDialogues(){
   $('#dlgCards').innerHTML = DATA.dialogues.map(d => {
     const done = p && p.dialogues.includes(d.id);
     return `
-    <button class="dlg-card" data-id="${d.id}" style="animation:pageIn .4s ${DATA.dialogues.indexOf(d)*0.05}s backwards">
+    <button type="button" class="dlg-card" data-id="${d.id}" style="animation:pageIn .4s ${DATA.dialogues.indexOf(d)*0.05}s backwards">
       <span class="dc-emoji">${d.emoji}</span>
       <h3>${d.title}</h3>
       <p>${esc(d.desc)}</p>
@@ -1089,17 +1153,17 @@ function renderDlg(){
       <div><h3>${d.title}</h3><div class="page-desc" style="margin-top:2px">${esc(d.desc)}</div></div>
     </div>
     <div class="dlg-mode-bar">
-      <button class="ph-tab ${dlgMode==='follow'?'active':''}" id="modeFollow">📖 逐句跟读</button>
-      <button class="ph-tab ${dlgMode==='role'?'active':''}" id="modeRole">🎭 角色扮演</button>
-      ${dlgMode==='follow' ? '<button class="btn btn-ghost sm" id="dlgPlayAll">▶ 整段朗读</button>' : ''}
+      <button type="button" class="ph-tab ${dlgMode==='follow'?'active':''}" id="modeFollow">📖 逐句跟读</button>
+      <button type="button" class="ph-tab ${dlgMode==='role'?'active':''}" id="modeRole">🎭 角色扮演</button>
+      ${dlgMode==='follow' ? '<button type="button" class="btn btn-ghost sm" id="dlgPlayAll">▶ 整段朗读</button>' : ''}
       ${dlgMode==='role' ? `
         <span style="font-size:13px;color:var(--ink-2);margin-left:6px">扮演：</span>
-        ${roles.map(r => `<button class="ph-tab ${dlgRole===r?'active':''}" data-role="${esc(r)}">${esc(r)}</button>`).join('')}
+        ${roles.map(r => `<button type="button" class="ph-tab ${dlgRole===r?'active':''}" data-role="${esc(r)}">${esc(r)}</button>`).join('')}
       ` : ''}
       ${dlgMode==='role' && dlgRole ? `
-        <button class="btn btn-primary sm" id="roleStart">▶ 播放对方台词</button>
-        <button class="btn btn-ghost sm" id="roleShow" style="display:none">👀 查看答案</button>
-        <button class="btn btn-ghost sm" id="roleReset">↻ 重置</button>
+        <button type="button" class="btn btn-primary sm" id="roleStart">▶ 播放对方台词</button>
+        <button type="button" class="btn btn-ghost sm" id="roleShow" style="display:none">👀 查看答案</button>
+        <button type="button" class="btn btn-ghost sm" id="roleReset">↻ 重置</button>
       ` : ''}
     </div>
     <div class="dlg-lines" id="dlgLines">
@@ -1113,11 +1177,11 @@ function renderDlg(){
             <div class="dl-mand">${esc(l.mand)}</div>
             ${dlgMode==='follow' ? `
               <div class="dl-tools">
-                <button class="dl-btn" data-act="play" data-i="${i}">🔊 听</button>
-                <button class="dl-btn rec" data-act="rec" data-i="${i}">🎤 跟读</button>
+                <button type="button" class="dl-btn" data-act="play" data-i="${i}">🔊 听</button>
+                <button type="button" class="dl-btn rec" data-act="rec" data-i="${i}">🎤 跟读</button>
               </div>` : dlgRole===l.speaker ? `
               <div class="dl-tools">
-                <button class="dl-btn" data-act="play" data-i="${i}">🔊 听答案</button>
+                <button type="button" class="dl-btn" data-act="play" data-i="${i}">🔊 听答案</button>
               </div>` : ''}
           </div>
         </div>`).join('')}
@@ -1126,7 +1190,7 @@ function renderDlg(){
   $('#modeFollow').onclick = () => { dlgMode='follow'; dlgRole=null; dlgRevealed=false; renderDlg(); };
   $('#modeRole').onclick = () => { dlgMode='role'; dlgRole=roles[0]; dlgRevealed=false; renderDlg(); };
   $$('[data-role]').forEach(b => b.onclick = () => { dlgRole = b.dataset.role; dlgRevealed=false; renderDlg(); });
-  const dlpa = $('#dlgPlayAll'); if(dlpa) dlpa.onclick = () => { if(curDlg) curDlg.lines.forEach(l => speak(l.han, {queue:true})); };
+  const dlpa = $('#dlgPlayAll'); if(dlpa) dlpa.onclick = () => { if(!curDlg) return; if(!guardBtn(dlpa)) return; curDlg.lines.forEach(l => speak(l.han, {queue:true})); };
   const rs = $('#roleStart'); if(rs) rs.onclick = roleStart;
   const rsh = $('#roleShow'); if(rsh) rsh.onclick = roleShow;
   const rrst = $('#roleReset'); if(rrst) rrst.onclick = () => { dlgRevealed=false; renderDlg(); };
@@ -1159,9 +1223,9 @@ async function followRecord(i, btn){
       const ana = await analyzeBlob(blob);
       const l = curDlg.lines[i];
       const res = evalRecord({text:l.han}, ana);
-      modalRoot.innerHTML = `<div class="modal-mask"><div class="modal" role="dialog" aria-modal="true" aria-label="跟读练习反馈"><h3>🎤 跟读练习反馈 <span class="chip chip-green" style="margin-left:auto">第 ${i+1} 句</span></h3><div id="ptFeedback"></div><div style="text-align:center;margin-top:16px"><button class="btn btn-ghost sm" id="evalClose">关闭</button></div></div></div>`;
+      openModal(`<h3>🎤 跟读练习反馈 <span class="chip chip-green" style="margin-left:auto">第 ${i+1} 句</span></h3><div id="ptFeedback"></div><div style="text-align:center;margin-top:16px"><button type="button" class="btn btn-ghost sm" id="evalClose">关闭</button></div>`);
       renderFeedback(res, {text:l.han, jp:l.jp}, $('#ptFeedback'));
-      $('#evalClose').onclick = () => { modalRoot.innerHTML = ''; };
+      $('#evalClose').onclick = closeModal;
       stream.getTracks().forEach(t=>t.stop());
     };
     followRec.mr = mr; followRec.rec = true;
@@ -1215,7 +1279,7 @@ function roleShow(){
 let curGrammar = null, lastGrammarLog = null;
 function renderGrammar(){
   $('#grammarList').innerHTML = DATA.grammar.map(g => `
-    <button class="grammar-item ${curGrammar && curGrammar.id===g.id?'active':''}" data-gid="${g.id}">
+    <button type="button" class="grammar-item ${curGrammar && curGrammar.id===g.id?'active':''}" data-gid="${g.id}">
       <div class="gi-num">LESSON ${g.num}</div>
       <h4>${esc(g.title)}</h4>
       <p>${esc(g.intro.slice(0,34))}…</p>
@@ -1247,7 +1311,7 @@ function renderGrammarArticle(){
     <div class="ga-block">
       <h4>例句练习</h4>
       ${g.examples.map(ex => `
-        <button class="ga-example" data-ex="${esc(ex.han)}" aria-label="播放例句 ${esc(ex.han)}">
+        <button type="button" class="ga-example" data-ex="${esc(ex.han)}" aria-label="播放例句 ${esc(ex.han)}">
           <span class="ge-play">🔊</span>
           <div class="ge-han">${esc(ex.han)}</div>
           <div class="ge-jp">${ex.jp}</div>
@@ -1285,7 +1349,7 @@ function renderCulture(){
       ? '<div class="cc-meaning" style="margin-top:8px">' + esc(it.desc) + '</div>'
       : '<div class="cc-han">' + (culTab === 'xiehou' ? esc(it.front) + ' —— ' + esc(it.back) : esc(it.meaning)) + '</div>';
     const story = '<div class="cc-story">📖 ' + esc(it.story) + '</div>';
-    const btn = '<button class="cc-play" title="朗读">▶</button>';
+    const btn = '<button type="button" class="cc-play" title="朗读">▶</button>';
     return '<div class="cul-card ' + (c.life?'cul-life':'') + '" style="animation:pageIn .4s ' + (i*0.05) + 's backwards">' + badge + head + body + story + btn + '</div>';
   }).join('');
   $$('#cultureGrid .cc-play').forEach((b,i) => b.onclick = () => {
@@ -1347,13 +1411,13 @@ function cloudPanelHtml(){
   if(cloudState.authenticated){
     const when=cloudState.updatedAt?new Date(cloudState.updatedAt).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):'首次同步中';
     return `<div class="cloud-status"><span class="cloud-dot online"></span><div><b>${esc(cloudState.user.displayName||cloudState.user.id)} · ${esc(cloudState.status)}</b><small>账户 ${esc(cloudState.user.id)} · 最近云端更新 ${esc(when)}</small>${cloudState.error?`<small class="cloud-error">${esc(cloudState.error)}</small>`:''}</div></div>
-      <div class="profile-actions"><button class="btn btn-primary sm" id="cloudSyncNow">↻ 立即同步</button><button class="btn btn-ghost sm" id="cloudLogout">退出云端</button></div>`;
+      <div class="profile-actions"><button type="button" class="btn btn-primary sm" id="cloudSyncNow">↻ 立即同步</button><button type="button" class="btn btn-ghost sm" id="cloudLogout">退出云端</button></div>`;
   }
   return `<p>需要跨手机和电脑使用时，可登录受邀账户。网站不开放公开注册，也不会把本机录音上传到云端。</p>
     <div class="cloud-login">
       <label>账户<input id="cloudUser" autocomplete="username" value="eachen" maxlength="40" spellcheck="false"></label>
       <label>密码<input id="cloudPassword" type="password" autocomplete="current-password" maxlength="256"></label>
-      <button class="btn btn-primary sm" id="cloudLogin">登录并同步</button>
+      <button type="button" class="btn btn-primary sm" id="cloudLogin">登录并同步</button>
     </div>
     <div class="profile-cloud-note">云端仅同步进度、目标、收藏、打卡和练习摘要；每个账户的数据独立存放。新账户由站点管理员邀请创建。</div>`;
 }
@@ -1384,16 +1448,16 @@ function renderProfile(){
         <div class="setting-row">
           <div><div class="sr-label">每日学习目标</div><div class="sr-sub">每天要学多少个词汇</div></div>
           <div class="num-stepper">
-            <button id="goalMinus" aria-label="减少每日目标">−</button><b id="goalVal">${p.goalCount}</b><button id="goalPlus" aria-label="增加每日目标">+</button>
+            <button type="button" id="goalMinus" aria-label="减少每日目标">−</button><b id="goalVal">${p.goalCount}</b><button type="button" id="goalPlus" aria-label="增加每日目标">+</button>
           </div>
         </div>
         <div class="setting-row">
           <div><div class="sr-label">打开网站时提醒</div><div class="sr-sub">当天目标未达成时，在本站内提示一次</div></div>
-          <button class="switch ${p.reminder?'on':''}" id="remindSwitch" aria-label="打开网站时提醒" aria-pressed="${p.reminder}"></button>
+          <button type="button" class="switch ${p.reminder?'on':''}" id="remindSwitch" aria-label="打开网站时提醒" aria-pressed="${p.reminder}"></button>
         </div>
         <div class="setting-row">
           <div><div class="sr-label">今日打卡</div><div class="sr-sub">${p.checkins[today] ? '今日已打卡 ✅' : '还没打卡，记得点一下'}</div></div>
-          <button class="btn btn-soft sm" id="checkinBtn2">${p.checkins[today]?'✓ 已打卡':'✍️ 打卡'}</button>
+          <button type="button" class="btn btn-soft sm" id="checkinBtn2">${p.checkins[today]?'✓ 已打卡':'✍️ 打卡'}</button>
         </div>
       </div>
       <div class="profile-col">
@@ -1402,7 +1466,7 @@ function renderProfile(){
           <div class="fav-item" data-cat="${f.cat.id}" role="button" tabindex="0" aria-label="打开 ${esc(f.w.han)} 所在词汇分类">
             <span class="fi-han">${f.w.han}</span>
             <span class="fi-jp">${f.w.jp} · ${esc(f.w.mand)}</span>
-            <button class="fi-del" title="删除">✕</button>
+            <button type="button" class="fi-del" title="删除">✕</button>
           </div>`).join('')}</div>` : '<div class="history-empty">还没有收藏，去词汇页点 ☆ 收藏吧</div>'}
       </div>
       <div class="profile-col" style="grid-column:1/-1">
@@ -1419,9 +1483,9 @@ function renderProfile(){
         <h3>💾 本机档案与备份</h3>
         <p>无需注册，进度会自动保存在当前设备。清理浏览器数据或换设备前，请先导出档案；录音不会写入档案。</p>
         <div class="profile-actions">
-          <button class="btn btn-primary sm" id="profileExport">⬇️ 导出档案</button>
-          <button class="btn btn-ghost sm" id="profileImport">⬆️ 导入档案</button>
-          <button class="btn btn-ghost sm danger" id="profileReset">清除本机档案</button>
+          <button type="button" class="btn btn-primary sm" id="profileExport">⬇️ 导出档案</button>
+          <button type="button" class="btn btn-ghost sm" id="profileImport">⬆️ 导入档案</button>
+          <button type="button" class="btn btn-ghost sm danger" id="profileReset">清除本机档案</button>
           <input id="profileFile" class="hidden" type="file" accept="application/json,.json">
         </div>
       </div>
@@ -1483,18 +1547,16 @@ function maybeRemind(){
 
 /* ================= 全局事件 ================= */
 function showMobileMore(){
-  modalRoot.innerHTML = `<div class="modal-mask" id="moreMask"><div class="modal mobile-more" role="dialog" aria-modal="true" aria-labelledby="moreTitle">
-    <h3 id="moreTitle">更多学习内容 <button class="modal-x" id="moreClose" aria-label="关闭">✕</button></h3>
+  openModal(`
+    <h3 id="moreTitle">更多学习内容 <button type="button" class="modal-x" id="moreClose" aria-label="关闭">✕</button></h3>
     <div class="mobile-more-grid">
-      <button data-more-nav="sing"><span>🎵</span><b>学唱粤语歌</b><small>逐句听唱与跟读</small></button>
-      <button data-more-nav="grammar"><span>🧩</span><b>语法专栏</b><small>十讲掌握常用结构</small></button>
-      <button data-more-nav="culture"><span>🏮</span><b>文化趣知</b><small>俗语与港式生活</small></button>
+      <button type="button" data-more-nav="sing"><span>🎵</span><b>学唱粤语歌</b><small>逐句听唱与跟读</small></button>
+      <button type="button" data-more-nav="grammar"><span>🧩</span><b>语法专栏</b><small>十讲掌握常用结构</small></button>
+      <button type="button" data-more-nav="culture"><span>🏮</span><b>文化趣知</b><small>俗语与港式生活</small></button>
     </div>
-  </div></div>`;
-  $('#moreClose').onclick = () => { modalRoot.innerHTML = ''; };
-  $('#moreMask').onclick = e => { if(e.target.id === 'moreMask') modalRoot.innerHTML = ''; };
-  $$('[data-more-nav]', modalRoot).forEach(b => b.onclick = () => { const route = b.dataset.moreNav; modalRoot.innerHTML = ''; navigate(route); });
-  $('#moreClose').focus();
+  </div>`, {cls:'mobile-more'});
+  $('#moreClose').onclick = closeModal;
+  $$('[data-more-nav]', modalRoot).forEach(b => b.onclick = () => { const route = b.dataset.moreNav; closeModal(); navigate(route); });
 }
 function bindGlobal(){
   /* 导航 */
@@ -1506,6 +1568,9 @@ function bindGlobal(){
   const setTheme = t => {
     document.documentElement.setAttribute('data-theme', t);
     $('#themeToggle').textContent = t === 'dark' ? '☀️ 亮色模式' : '🌙 暗色模式';
+    $('#themeToggle').setAttribute('aria-pressed', t==='dark'?'true':'false');
+    $('#themeToggle').setAttribute('aria-label', t==='dark'?'切换明暗主题，当前暗色':'切换明暗主题，当前亮色');
+    $('#mThemeToggle').setAttribute('aria-pressed', t==='dark'?'true':'false');
     $('#mThemeToggle').textContent = t === 'dark' ? '☀️' : '🌙';
     LS.set('canto_theme', t);
   };
@@ -1515,13 +1580,28 @@ function bindGlobal(){
   if(savedTheme) setTheme(savedTheme);
   /* 语音页 */
   $$('.ph-tab').forEach(b => b.onclick = () => {
-    if(b.dataset.phtab){ phTab = b.dataset.phtab; phSel = null; practiceTarget = null; $$('.ph-tab').forEach(x=>x.classList.remove('active')); b.classList.add('active'); renderPhGrid(); }
+    if(b.dataset.phtab){ phTab = b.dataset.phtab; phSel = null; practiceTarget = null;
+      $$('.ph-tab').forEach(x=>{ x.classList.remove('active'); x.setAttribute('aria-selected','false'); });
+      b.classList.add('active'); b.setAttribute('aria-selected','true'); renderPhGrid(); }
+  });
+  /* 语音页 tablist 方向键（←/→ 切换） */
+  const phTablist = document.getElementById('phTablist');
+  if(phTablist) phTablist.addEventListener('keydown', e => {
+    if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const tabs = $$('[data-phtab]', phTablist).filter(t => !t.disabled);
+    if(!tabs.length) return;
+    const i = tabs.indexOf(document.activeElement);
+    const ni = i < 0 ? 0 : (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    e.preventDefault();
+    tabs[ni].focus(); tabs[ni].click();
   });
   $$('[data-cul-tab]').forEach(b => b.onclick = () => {
-    culTab = b.dataset.culTab; $$('[data-cul-tab]').forEach(x=>x.classList.remove('active')); b.classList.add('active'); renderCulture();
+    culTab = b.dataset.culTab;
+    $$('[data-cul-tab]').forEach(x=>{ x.classList.remove('active'); x.setAttribute('aria-pressed','false'); });
+    b.classList.add('active'); b.setAttribute('aria-pressed','true'); renderCulture();
   });
   $('#phSearch').addEventListener('input', renderPhGrid);
-  $('#phPlayAll').onclick = () => {
+  $('#phPlayAll').onclick = () => { if(!guardBtn($('#phPlayAll'))) return;
     const q = ($('#phSearch').value||'').trim();
     let items;
     if(phTab==='initials') items = DATA.initials;
@@ -1535,7 +1615,7 @@ function bindGlobal(){
   };
   $('#phStopAll').onclick = stopSpeak;
   /* 发音练习台 */
-  $('#ptDemo').onclick = () => { if(practiceTarget) speak(practiceTarget.text); else toast('先点选一张音标卡片'); };
+  $('#ptDemo').onclick = () => { if(!practiceTarget){ toast('先点选一张音标卡片'); return; } if(!guardBtn($('#ptDemo'))) return; speak(practiceTarget.text); };
   $('#ptRecord').onclick = () => {
     if(!practiceTarget){ toast('先点选一张音标卡片再录音'); return; }
     if(recording) stopRecord();
@@ -1544,8 +1624,8 @@ function bindGlobal(){
   $('#ptPlayback').onclick = () => { if(audioEl && recordedUrl) audioEl.play(); };
   /* 词汇页 */
   $('#vocabSearch').addEventListener('input', renderVocabGrid);
-  $('#favFilter').onclick = () => { vocabFavOnly = !vocabFavOnly; vocabReviewOnly = false; $('#favFilter').classList.toggle('chip-red', vocabFavOnly); $('#reviewBtn').classList.remove('active'); renderVocabGrid(); };
-  $('#reviewBtn').onclick = () => { vocabReviewOnly = !vocabReviewOnly; vocabFavOnly = false; $('#reviewBtn').classList.toggle('active', vocabReviewOnly); $('#favFilter').classList.remove('chip-red'); renderVocab(); updateReviewBtn(); };
+  $('#favFilter').onclick = () => { vocabFavOnly = !vocabFavOnly; vocabReviewOnly = false; $('#favFilter').classList.toggle('chip-red', vocabFavOnly); $('#favFilter').setAttribute('aria-pressed', vocabFavOnly?'true':'false'); $('#reviewBtn').classList.remove('active'); $('#reviewBtn').setAttribute('aria-pressed','false'); renderVocabGrid(); };
+  $('#reviewBtn').onclick = () => { vocabReviewOnly = !vocabReviewOnly; vocabFavOnly = false; $('#reviewBtn').classList.toggle('active', vocabReviewOnly); $('#reviewBtn').setAttribute('aria-pressed', vocabReviewOnly?'true':'false'); $('#favFilter').classList.remove('chip-red'); $('#favFilter').setAttribute('aria-pressed','false'); renderVocab(); updateReviewBtn(); };
   $('#favPlayAll').onclick = () => {
     const cat = DATA.vocabCategories.find(c=>c.id===vocabCat);
     cat.words.forEach((w,i) => setTimeout(() => speak(w.han, {queue:true}), i * 1400));
@@ -1590,7 +1670,7 @@ function annotateRuby(han, jp){
 function renderSing(){
   const list = SONGS.filter(s => (songFilter==='all' || s.level===songFilter) && (!songQuery || (s.title + s.artist).toLowerCase().includes(songQuery)));
   $('#songCards').innerHTML = list.map((s,i) => `
-    <button class="song-card" data-sid="${s.id}" style="background:linear-gradient(135deg,${s.colors[0]},${s.colors[1]});animation:pageIn .4s ${i*0.08}s backwards">
+    <button type="button" class="song-card" data-sid="${s.id}" style="background:linear-gradient(135deg,${s.colors[0]},${s.colors[1]});animation:pageIn .4s ${i*0.08}s backwards">
       <span class="sc-emoji">${s.emoji}</span>
       <span class="sc-dots"><i></i><i></i><i></i></span>
       <h3>${s.title}</h3>
@@ -1600,7 +1680,7 @@ function renderSing(){
   $$('#songCards .song-card').forEach(c => c.onclick = () => openSong(c.dataset.sid));
   /* 歌词字词小词典 */
   $('#swGrid').innerHTML = LYRIC_WORDS.map(w => `
-    <button class="sw-item" title="点击朗读" aria-label="播放 ${esc(w.char)}">
+    <button type="button" class="sw-item" title="点击朗读" aria-label="播放 ${esc(w.char)}">
       <div class="sw-top"><span class="sw-char">${w.char}</span><span class="sw-jp">${w.jp}</span></div>
       <div class="sw-mand">${w.mand}</div>
       <div class="sw-ex">${w.ex}</div>
@@ -1636,8 +1716,8 @@ function renderSong(){
         <div class="ll-jp">${l.jp}</div>
         <div class="ll-mand">${l.mand}</div>
         <div class="ll-tools">
-          <button class="ll-btn" data-act="demo" data-i="${i}">🔊 示范</button>
-          <button class="ll-btn rec" data-act="rec" data-i="${i}">🎤 跟唱</button>
+          <button type="button" class="ll-btn" data-act="demo" data-i="${i}">🔊 示范</button>
+          <button type="button" class="ll-btn rec" data-act="rec" data-i="${i}">🎤 跟唱</button>
         </div>
       </div>
       <span class="ll-badge">NOW ▶</span>
@@ -1697,9 +1777,9 @@ async function singRec(i, btn){
       const ana = await analyzeBlob(blob);
       const l = curSong.lyric[i];
       const res = evalRecord({text:l.han}, ana);
-      modalRoot.innerHTML = `<div class="modal-mask"><div class="modal" role="dialog" aria-modal="true" aria-label="跟唱练习反馈"><h3>🎤 跟唱练习反馈 <span class="chip chip-green" style="margin-left:auto">${curSong.title} · 第 ${i+1} 句</span></h3><div id="ptFeedback"></div><div style="text-align:center;margin-top:16px"><button class="btn btn-ghost sm" id="evalClose">关闭</button></div></div></div>`;
+      openModal(`<h3>🎤 跟唱练习反馈 <span class="chip chip-green" style="margin-left:auto">${curSong.title} · 第 ${i+1} 句</span></h3><div id="ptFeedback"></div><div style="text-align:center;margin-top:16px"><button type="button" class="btn btn-ghost sm" id="evalClose">关闭</button></div>`);
       renderFeedback(res, {text:l.han, jp:l.jp}, $('#ptFeedback'));
-      $('#evalClose').onclick = () => { modalRoot.innerHTML = ''; };
+      $('#evalClose').onclick = closeModal;
       logPractice('🎵', curSong.title + ' 第' + (i+1) + '句', finalScore(res, null));
       stream.getTracks().forEach(t => t.stop());
     };
@@ -1719,8 +1799,8 @@ function fmtT(t){
 function showFullLyric(){
   if(!curSong) return;
   const s = curSong;
-  modalRoot.innerHTML = `<div class="modal-mask" id="flMask"><div class="modal lyric-full-modal">
-    <h3>📄 ${s.title} <span class="chip chip-gold" style="font-size:11px">全文注音</span><button id="flClose" style="margin-left:auto;border:none;background:none;font-size:18px;color:var(--ink-3);cursor:pointer;padding:2px 6px" title="关闭">✕</button></h3>
+  openModal(`
+    <h3>📄 ${s.title} <span class="chip chip-gold" style="font-size:11px">全文注音</span><button type="button" id="flClose" style="margin-left:auto;border:none;background:none;font-size:18px;color:var(--ink-3);cursor:pointer;padding:2px 6px" title="关闭">✕</button></h3>
     <div class="lyric-full">
       ${s.lyric.map((l,i) => `
         <div class="lf-line" data-i="${i}">
@@ -1729,10 +1809,9 @@ function showFullLyric(){
           <span class="lf-mand">${esc(l.mand)}</span>
         </div>`).join('')}
     </div>
-    <p class="tip" style="text-align:center;margin-top:14px">点击任意句朗读 · 歌词仅供学习，版权归原作者所有</p>
-  </div></div>`;
-  $('#flClose').onclick = () => { modalRoot.innerHTML = ''; };
-  $('#flMask').addEventListener('click', e => { if(e.target.id === 'flMask') modalRoot.innerHTML = ''; });
+      <p class="tip" style="text-align:center;margin-top:14px">点击任意句朗读 · 歌词仅供学习，版权归原作者所有</p>
+  `, {cls:'lyric-full-modal', label:`${s.title} 全文注音`});
+  $('#flClose').onclick = closeModal;
   $$('#modalRoot .lf-line').forEach(el => el.onclick = () => {
     speak(s.lyric[+el.dataset.i].han);
     $$('#modalRoot .lf-line').forEach(x => x.classList.remove('playing'));
@@ -1753,16 +1832,18 @@ function bindSing(){
   };
   $('#sgPrev').onclick = sgPrev;
   $('#sgNext').onclick = sgNext;
-  $('#sgDemo').onclick = () => { if(curSong) gotoLine(sgIdx, true); };
+  $('#sgDemo').onclick = () => { if(!curSong) return; if(!guardBtn($('#sgDemo'))) return; gotoLine(sgIdx, true); };
   $('#sgRec').onclick = () => { if(curSong) singRec(sgIdx, $('#sgRec')); };
   $('#sgLoop').onclick = () => {
     sgLoop = !sgLoop;
     $('#sgLoop').classList.toggle('active', sgLoop);
+    $('#sgLoop').setAttribute('aria-pressed', sgLoop?'true':'false');
     toast(sgLoop ? '🔁 单句循环已开启：反复练当前句' : '单句循环已关闭');
   };
   $('#sgAuto').onclick = () => {
     sgAuto = !sgAuto;
     $('#sgAuto').classList.toggle('active', sgAuto);
+    $('#sgAuto').setAttribute('aria-pressed', sgAuto?'true':'false');
     if(sgAuto){ updateSingStatus('⚡ 自动跟唱：示范 → 你唱 → 下一句'); sgAutoPlay(); }
     else { clearTimeout(sgAutoTimer); updateSingStatus('已停止自动跟唱'); }
   };
@@ -1774,7 +1855,13 @@ function bindSing(){
     if(!toggle) return;
     toggle.onclick = e => {
       e.stopPropagation();
-      panel.classList.toggle('hidden');
+      const nowHidden = panel.classList.toggle('hidden');
+      toggle.setAttribute('aria-expanded', nowHidden ? 'false' : 'true');
+      if(!nowHidden){
+        const f0 = $$('#rfRate button')[0]; if(f0) f0.focus();
+        const esc = ev => { if(ev.key === 'Escape'){ panel.classList.add('hidden'); toggle.setAttribute('aria-expanded','false'); document.removeEventListener('keydown', esc); } };
+        document.addEventListener('keydown', esc);
+      }
     };
     $$('#rfRate button').forEach(b => {
       b.onclick = e => {
@@ -1806,8 +1893,8 @@ function bindSing(){
   if(sfAll) sfAll.onclick = () => { songFilter='all'; updateSongFilterUI(); renderSing(); };
   $$('[data-sf]').forEach(b => b.onclick = () => { songFilter = b.dataset.sf; updateSongFilterUI(); renderSing(); });
   function updateSongFilterUI(){
-    const a = $('#songFilterAll'); if(a) a.classList.toggle('active', songFilter==='all');
-    $$('[data-sf]').forEach(b => b.classList.toggle('active', b.dataset.sf===songFilter));
+    const a = $('#songFilterAll'); if(a){ a.classList.toggle('active', songFilter==='all'); a.setAttribute('aria-pressed', songFilter==='all'?'true':'false'); }
+    $$('[data-sf]').forEach(b => { const on = b.dataset.sf===songFilter; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on?'true':'false'); });
   }
   $('#spImport').onclick = () => $('#spFile').click();
   $('#spFile').onchange = e => {
@@ -1818,6 +1905,7 @@ function bindSing(){
     sgAudio = new Audio(sgFileUrl);
     sgAudio.addEventListener('timeupdate', () => {
       $('#spSeek').value = sgAudio.duration ? sgAudio.currentTime / sgAudio.duration * 100 : 0;
+      $('#spSeek').setAttribute('aria-valuetext', fmtT(sgAudio.currentTime) + ' / ' + fmtT(sgAudio.duration));
       $('#spTime').textContent = fmtT(sgAudio.currentTime) + ' / ' + fmtT(sgAudio.duration);
     });
     sgAudio.addEventListener('ended', () => { $('#spPlay').textContent = '▶ 播放'; });
@@ -1831,7 +1919,7 @@ function bindSing(){
     else { sgAudio.pause(); $('#spPlay').textContent = '▶ 播放'; }
   };
   $('#spSeek').addEventListener('input', e => {
-    if(sgAudio && sgAudio.duration) sgAudio.currentTime = e.target.value / 100 * sgAudio.duration;
+    if(sgAudio && sgAudio.duration){ sgAudio.currentTime = e.target.value / 100 * sgAudio.duration; $('#spSeek').setAttribute('aria-valuetext', fmtT(sgAudio.currentTime) + ' / ' + fmtT(sgAudio.duration)); }
   });
   $('#spRate').onchange = e => { if(sgAudio) sgAudio.playbackRate = +e.target.value; };
 }

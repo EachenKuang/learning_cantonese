@@ -878,3 +878,36 @@ input{font-family:inherit;color:inherit}
 .cont-review:hover{border-color:var(--gold);transform:translateX(3px)}
 .cont-review b{color:var(--gold);font-size:14px}
 .cont-review span{font-size:12px;color:var(--ink-3)}
+
+/* ============ 控件无障碍与打磨（控件优化清单） ============ */
+/* 进度滑块：自定义 thumb/track，移动端可点 */
+input[type="range"]{
+  -webkit-appearance:none; appearance:none;
+  height:6px; border-radius:999px; background:var(--line); outline-offset:4px;
+}
+input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none; width:18px; height:18px; border-radius:50%;
+  background:var(--red); box-shadow:0 1px 4px rgba(0,0,0,.3); cursor:pointer; border:none;
+}
+input[type="range"]::-moz-range-thumb{
+  width:18px; height:18px; border:none; border-radius:50%;
+  background:var(--red); box-shadow:0 1px 4px rgba(0,0,0,.3); cursor:pointer;
+}
+/* 搜索框（type=search 自带清除按钮美化） */
+input[type="search"]::-webkit-search-cancel-button{
+  -webkit-appearance:none; height:14px; width:14px; border-radius:50%; cursor:pointer;
+  background:var(--ink-3);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 4l8 8M12 4l-8 8' stroke='%23fff' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E") center/10px no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 4l8 8M12 4l-8 8' stroke='%23fff' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E") center/10px no-repeat;
+}
+input[type="search"]::-webkit-search-cancel-button:hover{ background:var(--red) }
+/* 录音按钮：闪烁圆点（非纯颜色状态，色盲/单色可辨） */
+#ptRecord.recording{ position:relative }
+#ptRecord.recording::before{
+  content:''; position:absolute; left:14px; top:50%; width:8px; height:8px; margin-top:-4px;
+  border-radius:50%; background:#fff; animation:recPulse 1s ease-in-out infinite;
+}
+@keyframes recPulse{
+  0%,100%{ opacity:1; box-shadow:0 0 0 0 rgba(255,255,255,.55) }
+  50%{ opacity:.5; box-shadow:0 0 0 6px rgba(255,255,255,0) }
+}
