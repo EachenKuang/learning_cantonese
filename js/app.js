@@ -538,7 +538,7 @@ function renderHome(){
   $('#statWords').textContent = totalWords;
   $('#statDialogues').textContent = DATA.dialogues.length;
   $('#statArticles').textContent = DATA.grammar.length;
-  $('#statCulture').textContent = DATA.culture.sayings.length + DATA.culture.xiehou.length + DATA.culture.life.length;
+  $('#statCulture').textContent = Object.values(DATA.culture).reduce((n,a)=>n+a.length,0);
 
   const p = getProgress();
   {
@@ -570,11 +570,11 @@ function renderHome(){
   /* 模块入口 */
   const mods = [
     {ico:'🎙️', t:'语音学习', d:'粤拼声母 · 韵母 · 声调，录音对比发音', nav:'phonetics'},
-    {ico:'📖', t:'场景词汇', d:`8 大生活场景，${totalWords} 个高频词 + 听力小测`, nav:'vocab'},
+    {ico:'📖', t:'场景词汇', d:`10 大场景 ${totalWords} 词，点卡即读 + 听力小测`, nav:'vocab'},
     {ico:'💬', t:'对话实战', d:'茶楼点餐、街市买菜，跟读 + 角色扮演', nav:'dialogues'},
     {ico:'🎵', t:'学唱粤语歌', d:'11 首经典金曲全曲歌词，逐句跟唱练咬字', nav:'sing'},
     {ico:'🧩', t:'语法专栏', d:'量词 · 语气词 · 体貌助词，十讲吃透', nav:'grammar'},
-    {ico:'🏮', t:'文化趣知', d:'俗语歇后语，港式生活冷知识', nav:'culture'},
+    {ico:'🏮', t:'文化趣知', d:'俗语·歇后语·节庆·小食·TVB金句', nav:'culture'},
     {ico:'📊', t:'学习档案', d:'目标 · 打卡 · 收藏 · 练习历史 · 本机备份', nav:'profile'},
   ];
   $('#moduleGrid').innerHTML = mods.map(m => `
@@ -695,6 +695,7 @@ function renderVocabGrid(){
       <div class="wc-mand">${esc(w.mand)}</div>
       <div class="wc-ex">
         ${esc(w.ex)}
+        <button class="wc-explay" title="朗读例句">🔊</button>
         <div class="wx-jp">${w.exjp}</div>
         <div class="wx-mand">${esc(w.exmand)}</div>
       </div>
@@ -706,9 +707,20 @@ function renderVocabGrid(){
   $$('#vocabGrid .word-card').forEach((card, i) => {
     const w = words[i];
     const playBtn = $('.wc-play', card);
-    playBtn.onclick = () => {
+    /* 点击卡片 = 朗读该词 */
+    card.onclick = () => {
       speak(w.han);
       markWordLearned(cat.id, w);
+    };
+    playBtn.onclick = e => {
+      e.stopPropagation();
+      speak(w.han);
+      markWordLearned(cat.id, w);
+    };
+    const exPlay = $('.wc-explay', card);
+    if(exPlay) exPlay.onclick = e => {
+      e.stopPropagation();
+      speak(w.ex);
     };
     $('.wc-fav', card).onclick = e => {
       e.stopPropagation();
@@ -1014,18 +1026,30 @@ function renderGrammarArticle(){
 let culTab = 'sayings';
 function renderCulture(){
   const d = DATA.culture;
-  let items = [];
-  if(culTab === 'sayings') items = d.sayings.map(s => ({...s, badge:'俗语', cls:'', play:s.han}));
-  else if(culTab === 'xiehou') items = d.xiehou.map(x => ({...x, badge:'歇后语', cls:'cul-life', play:x.front + '——' + x.back}));
-  else items = d.life.map(l => ({...l, badge:l.tag, cls:'cul-life', play:l.title}));
-  $('#cultureGrid').innerHTML = items.map((it,i) => `
-    <div class="cul-card ${it.cls}" style="animation:pageIn .4s ${i*0.05}s backwards">
-      <span class="cc-badge">${esc(it.badge)}</span>
-      ${culTab==='life' ? `<h3>${esc(it.title)}</h3>` : culTab==='xiehou' ? `<h3>${esc(it.front)} <span style="color:var(--ink-3);font-size:14px">—— ${esc(it.back)}</span></h3><div class="cc-jp">${esc(it.jp||'')}</div>` : `<h3>${esc(it.han)}</h3><div class="cc-jp">${esc(it.jp||'')}</div>`}
-      ${culTab==='life' ? `<div class="cc-meaning" style="margin-top:8px">${esc(it.desc)}</div>` : `<div class="cc-han">${culTab==='xiehou' ? esc(it.front)+' —— '+esc(it.back) : esc(it.meaning)}</div>`}
-      <div class="cc-story">📖 ${esc(it.story)}</div>
-      <button class="cc-play" title="朗读">▶</button>
-    </div>`).join('');
+  const conf = {
+    sayings:{arr:d.sayings, badge:'俗语', life:false, play:it=>it.han},
+    xiehou:{arr:d.xiehou, badge:'歇后语', life:false, play:it=>it.front + '——' + it.back},
+    life:{arr:d.life, badge:it=>it.tag, life:true, play:it=>it.title},
+    festival:{arr:d.festival, badge:'节庆习俗', life:false, play:it=>it.han},
+    food:{arr:d.food, badge:it=>it.tag, life:true, play:it=>it.title},
+    tvb:{arr:d.tvb, badge:'TVB金句', life:false, play:it=>it.han},
+  };
+  const c = conf[culTab] || conf.sayings;
+  const items = c.arr.map(it => ({...it, badge: typeof c.badge === 'function' ? c.badge(it) : c.badge, cls:'', play:c.play(it)}));
+  $('#cultureGrid').innerHTML = items.map((it,i) => {
+    const badge = '<span class="cc-badge">' + esc(it.badge) + '</span>';
+    const head = c.life
+      ? '<h3>' + esc(it.title) + '</h3>'
+      : culTab === 'xiehou'
+        ? '<h3>' + esc(it.front) + ' <span style="color:var(--ink-3);font-size:14px">—— ' + esc(it.back) + '</span></h3><div class="cc-jp">' + esc(it.jp||'') + '</div>'
+        : '<h3>' + esc(it.han) + '</h3><div class="cc-jp">' + esc(it.jp||'') + '</div>';
+    const body = c.life
+      ? '<div class="cc-meaning" style="margin-top:8px">' + esc(it.desc) + '</div>'
+      : '<div class="cc-han">' + (culTab === 'xiehou' ? esc(it.front) + ' —— ' + esc(it.back) : esc(it.meaning)) + '</div>';
+    const story = '<div class="cc-story">📖 ' + esc(it.story) + '</div>';
+    const btn = '<button class="cc-play" title="朗读">▶</button>';
+    return '<div class="cul-card ' + (c.life?'cul-life':'') + '" style="animation:pageIn .4s ' + (i*0.05) + 's backwards">' + badge + head + body + story + btn + '</div>';
+  }).join('');
   $$('#cultureGrid .cc-play').forEach((b,i) => b.onclick = () => {
     const it = items[i];
     speak(it.play);
@@ -1502,27 +1526,37 @@ function bindSing(){
     else { clearTimeout(sgAutoTimer); updateSingStatus('已停止自动跟唱'); }
   };
   $('#sgFull').onclick = showFullLyric;
-  /* 朗读语速选择器（唱歌页 + 语音页，全局同步） */
-  ['sgRate','phRate'].forEach(id => {
-    const box = document.getElementById(id);
-    if(!box) return;
-    $$('button', box).forEach(b => {
-      b.onclick = () => {
+  bindRatePickers();
+  /* 全局悬浮朗读语速 */
+  function bindRatePickers(){
+    const panel = $('#rfPanel'), toggle = $('#rfToggle'), label = $('#rfLabel');
+    if(!toggle) return;
+    toggle.onclick = e => {
+      e.stopPropagation();
+      panel.classList.toggle('hidden');
+    };
+    $$('#rfRate button').forEach(b => {
+      b.onclick = e => {
+        e.stopPropagation();
         speechRate = parseFloat(b.dataset.r);
         LS.set('canto_speech_rate', speechRate);
         updateRateUI();
         toast('朗读语速：' + speechRate + '×');
+        panel.classList.add('hidden');
       };
     });
-  });
-  updateRateUI();
+    document.addEventListener('click', e => {
+      const box = document.getElementById('rateFloat');
+      if(box && !box.contains(e.target)) panel.classList.add('hidden');
+    });
+    updateRateUI();
+  }
   function updateRateUI(){
-  ['sgRate','phRate'].forEach(id => {
-    const box = document.getElementById(id);
-    if(!box) return;
-    $$('button', box).forEach(b => b.classList.toggle('active', parseFloat(b.dataset.r) === speechRate));
-  });
-}
+    $$('#rfRate button').forEach(b => b.classList.toggle('active', parseFloat(b.dataset.r) === speechRate));
+    const label = $('#rfLabel');
+    if(label) label.textContent = speechRate + '×';
+  }
+
 
 /* ================= 整曲播放（唱歌页） ================= */
   $('#spImport').onclick = () => $('#spFile').click();

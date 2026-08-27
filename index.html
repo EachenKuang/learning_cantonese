@@ -148,15 +148,6 @@
         <div class="ph-tools">
           <button class="btn btn-ghost sm" id="phPlayAll">▶ 全部朗读</button>
           <button class="btn btn-ghost sm" id="phStopAll">⏹ 停止</button>
-          <span class="rate-label">语速</span>
-          <div class="rate-group" id="phRate">
-            <button data-r="0.5">0.5×</button>
-            <button data-r="0.75">0.75×</button>
-            <button data-r="1">1×</button>
-            <button data-r="1.25">1.25×</button>
-            <button data-r="1.5">1.5×</button>
-            <button data-r="2">2×</button>
-          </div>
         </div>
       </div>
       <div class="ph-grid" id="phGrid"></div>
@@ -257,15 +248,6 @@
           <button class="ph-tab" id="sgLoop">🔁 循环本句</button>
           <button class="ph-tab" id="sgAuto">⚡ 自动跟唱</button>
           <button class="ph-tab" id="sgFull">📄 全文注音</button>
-          <span class="rate-label">语速</span>
-          <div class="rate-group" id="sgRate">
-            <button data-r="0.5">0.5×</button>
-            <button data-r="0.75">0.75×</button>
-            <button data-r="1">1×</button>
-            <button data-r="1.25">1.25×</button>
-            <button data-r="1.5">1.5×</button>
-            <button data-r="2">2×</button>
-          </div>
         </div>
         <p class="tip" id="singStatus">点击任意歌词句可跳转；按「示范本句」听 AI 朗读，或「录音跟唱」唱一遍对比。</p>
 
@@ -305,6 +287,9 @@
         <button class="ph-tab active" data-cul-tab="sayings">粤语俗语</button>
         <button class="ph-tab" data-cul-tab="xiehou">歇后语</button>
         <button class="ph-tab" data-cul-tab="life">港式文化</button>
+        <button class="ph-tab" data-cul-tab="festival">节庆习俗</button>
+        <button class="ph-tab" data-cul-tab="food">港式小食</button>
+        <button class="ph-tab" data-cul-tab="tvb">TVB金句</button>
       </div>
       <div class="culture-grid" id="cultureGrid"></div>
     </section>
@@ -333,6 +318,21 @@
 </div>
 
 <div id="modalRoot"></div>
+<div id="rateFloat" class="rate-float">
+  <div class="rf-panel hidden" id="rfPanel">
+    <div class="rf-title">🔊 朗读语速（全局）</div>
+    <div class="rate-group" id="rfRate">
+      <button data-r="0.5">0.5×</button>
+      <button data-r="0.75">0.75×</button>
+      <button data-r="1">1×</button>
+      <button data-r="1.25">1.25×</button>
+      <button data-r="1.5">1.5×</button>
+      <button data-r="2">2×</button>
+    </div>
+    <div class="rf-tip">作用于所有 AI 朗读（歌词·词汇·对话·语法）</div>
+  </div>
+  <button class="rf-btn" id="rfToggle" title="朗读语速"><span id="rfLabel">0.75×</span></button>
+</div>
 <div id="toast"></div>
 <script src="js/data.js?v=11"></script>
 <script src="js/songs.js?v=11"></script>

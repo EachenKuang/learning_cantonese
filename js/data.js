@@ -104,7 +104,7 @@ vocabCategories: [
   id:'food', name:'饮食', icon:'🍜', words:[
     {han:'饮茶', jp:'jam2 caa4', mand:'喝早茶', ex:'我哋听日去饮茶。', exjp:'ngo5 dei6 ting1 jat6 heoi3 jam2 caa4.', exmand:'我们明天去喝早茶。'},
     {han:'虾饺', jp:'haa1 gaau2', mand:'虾饺', ex:'虾饺好鲜。', exjp:'haa1 gaau2 hou2 sin1.', exmand:'虾饺很鲜美。'},
-    {han:'烧卖', jp:'siu1 maai2', mand:'烧麦', ex:'一笼烧卖几钱？', exjp:'jat1 lung4 siu1 maai2 gei2 cin2?', exmand:'一笼烧麦多少钱？'},
+    {han:'烧卖', jp:'siu1 maai6', mand:'烧麦', ex:'一笼烧卖几钱？', exjp:'jat1 lung4 siu1 maai6 gei2 cin2?', exmand:'一笼烧麦多少钱？'},
     {han:'蛋挞', jp:'daan6 taat1', mand:'蛋挞', ex:'新鲜出炉嘅蛋挞。', exjp:'san1 sin1 ceot1 lou2 ge3 daan6 taat1.', exmand:'新鲜出炉的蛋挞。'},
     {han:'云吞面', jp:'wan4 tan1 min6', mand:'馄饨面', ex:'我食云吞面，唔该。', exjp:'ngo5 sik6 wan4 tan1 min6, m4 goi1.', exmand:'我要馄饨面，谢谢。'},
     {han:'煲仔饭', jp:'bou1 zai2 faan6', mand:'煲仔饭', ex:'煲仔饭要等十五分钟。', exjp:'bou1 zai2 faan6 jiu3 dang2 sap6 ng5 fan1 zung1.', exmand:'煲仔饭要等十五分钟。'},
@@ -114,7 +114,13 @@ vocabCategories: [
     {han:'肠粉', jp:'coeng2 fan2', mand:'肠粉', ex:'斋肠粉落豉油。', exjp:'zaai1 coeng2 fan2 lok6 si6 jau4.', exmand:'斋肠粉加酱油。'},
     {han:'白粥', jp:'baak6 zuk1', mand:'白粥', ex:'病咗饮白粥好啲。', exjp:'beng6 zo2 jam2 baak6 zuk1 hou2 di1.', exmand:'生病了喝白粥好一些。'},
     {han:'大排档', jp:'daai6 paai4 dong3', mand:'大排档', ex:'大排档啲镬气十足。', exjp:'daai6 paai4 dong3 di1 wok6 hei3 sap6 zuk1.', exmand:'大排档的锅气很足。'},
-  ]},
+    {han:'白饭', jp:'baak6 faan6', mand:'米饭', ex:'要碗白饭，唔该。', exjp:'jiu3 wun2 baak6 faan6, m4 goi1.', exmand:'要一碗米饭，谢谢。'},
+    {han:'汤水', jp:'tong1 seoi2', mand:'老火汤', ex:'屋企煲咗汤水。', exjp:'uk1 kei2 bou1 zo2 tong1 seoi2.', exmand:'家里煲了汤。'},
+    {han:'糖水', jp:'tong4 seoi2', mand:'甜品', ex:'食完饭食碗糖水。', exjp:'sik6 jyun4 faan6 sik6 wun2 tong4 seoi2.', exmand:'吃完饭喝碗糖水。'},
+    {han:'菠萝包', jp:'bo1 lo4 baau1', mand:'菠萝包', ex:'菠萝油要趁热食。', exjp:'bo1 lo4 jau2 jiu3 can3 jit6 sik6.', exmand:'菠萝油要趁热吃。'},
+    {han:'点心', jp:'dim2 sam1', mand:'点心', ex:'点心车推过嚟喇。', exjp:'dim2 sam1 ce1 teoi1 gwo3 lai4 laa3.', exmand:'点心车推过来了。'},
+    {han:'斋啡', jp:'zaai1 fe1', mand:'黑咖啡', ex:'我饮斋啡，唔加糖。', exjp:'ngo5 jam2 zaai1 fe1, m4 gaa1 tong4.', exmand:'我喝黑咖啡，不加糖。'},
+    {han:'柠茶', jp:'ning4 mung4 caa4', mand:'柠檬茶', ex:'冻柠茶少甜。', exjp:'dung3 ning4 mung4 caa4 siu2 tim4.', exmand:'冻柠茶少糖。'},  ]},
 {
   id:'transport', name:'交通', icon:'🚌', words:[
     {han:'巴士', jp:'baa1 si2', mand:'公交车', ex:'我搭巴士返工。', exjp:'ngo5 daap3 baa1 si2 faan1 gung1.', exmand:'我坐公交上班。'},
@@ -129,7 +135,10 @@ vocabCategories: [
     {han:'转车', jp:'zyun3 ce1', mand:'换乘', ex:'金钟要转车。', exjp:'gam1 zung1 jiu3 zyun3 ce1.', exmand:'金钟要换乘。'},
     {han:'八达通', jp:'baat3 daat6 tung1', mand:'八达通卡', ex:'八达通嘟一嘟就得。', exjp:'baat3 daat6 tung1 duk1 jat1 duk1 zau6 dak1.', exmand:'八达通刷一下就行。'},
     {han:'车站', jp:'ce1 zaam6', mand:'车站', ex:'我喺车站等你。', exjp:'ngo5 hai2 ce1 zaam6 dang2 nei5.', exmand:'我在车站等你。'},
-  ]},
+    {han:'塞车', jp:'sak1 ce1', mand:'堵车', ex:'依家塞车塞到傻。', exjp:'ji1 gaa1 sak1 ce1 sak1 dou3 so4.', exmand:'现在堵车堵得厉害。'},
+    {han:'搭车', jp:'daap3 ce1', mand:'乘车', ex:'我搭车返工。', exjp:'ngo5 daap3 ce1 faan1 gung1.', exmand:'我坐车上班。'},
+    {han:'行路', jp:'haang4 lou6', mand:'走路', ex:'我哋行路过去啦。', exjp:'ngo5 dei6 haang4 lou6 gwo3 heoi3 laa1.', exmand:'我们走路过去吧。'},
+    {han:'司机', jp:'si1 gei1', mand:'司机', ex:'司机大哥，前面转左。', exjp:'si1 gei1 daai6 go1, cin4 min6 zyun3 zo2.', exmand:'司机大哥，前面左转。'},  ]},
 {
   id:'shopping', name:'购物', icon:'🛍️', words:[
     {han:'买嘢', jp:'maai5 je5', mand:'买东西', ex:'我出去买嘢。', exjp:'ngo5 ceot1 heoi3 maai5 je5.', exmand:'我出去买东西。'},
@@ -144,7 +153,10 @@ vocabCategories: [
     {han:'现金', jp:'jin6 gam1', mand:'现金', ex:'用现金定八达通？', exjp:'jung6 jin6 gam1 ding6 baat3 daat6 tung1?', exmand:'用现金还是八达通？'},
     {han:'信用卡', jp:'seon3 jung6 kaat1', mand:'信用卡', ex:'信用卡埋单，多谢。', exjp:'seon3 jung6 kaat1 maai4 daan1, do1 ze6.', exmand:'信用卡结账，谢谢。'},
     {han:'打折', jp:'daa2 zit3', mand:'打折', ex:'依家打七折。', exjp:'ji1 gaa1 daa2 cat1 zit3.', exmand:'现在打七折。'},
-  ]},
+    {han:'价钱', jp:'gaa3 cin2', mand:'价格', ex:'呢件衫价钱贵唔贵？', exjp:'ni1 gin6 saam1 gaa3 cin2 gwai3 m4 gwai3?', exmand:'这件衣服价格贵不贵？'},
+    {han:'讲价', jp:'gong2 gaa3', mand:'砍价', ex:'街市可以讲价。', exjp:'gaai1 si5 ho2 ji5 gong2 gaa3.', exmand:'菜市场可以砍价。'},
+    {han:'平嘢', jp:'peng4 je5', mand:'便宜货', ex:'呢度好多平嘢。', exjp:'ni1 dou6 hou2 do1 peng4 je5.', exmand:'这里很多便宜货。'},
+    {han:'送货', jp:'sung3 fo3', mand:'送货', ex:'大件嘢可以送货上门。', exjp:'daai6 gin6 je5 ho2 ji5 sung3 fo3 soeng6 mun4.', exmand:'大件商品可以送货上门。'},  ]},
 {
   id:'social', name:'社交', icon:'🙋', words:[
     {han:'你好', jp:'nei5 hou2', mand:'你好', ex:'你好，我系小明。', exjp:'nei5 hou2, ngo5 hai6 siu2 ming4.', exmand:'你好，我是小明。'},
@@ -159,7 +171,10 @@ vocabCategories: [
     {han:'得闲', jp:'dak1 haan4', mand:'有空', ex:'你得闲吗？', exjp:'nei5 dak1 haan4 maa1?', exmand:'你有空吗？'},
     {han:'恭喜', jp:'gung1 hei2', mand:'恭喜', ex:'恭喜发财！', exjp:'gung1 hei2 faat3 coi4!', exmand:'恭喜发财！'},
     {han:'几好', jp:'gei2 hou2', mand:'挺好', ex:'最近点呀？几好呀。', exjp:'zeoi3 gan6 dim2 aa3? gei2 hou2 aa3.', exmand:'最近怎么样？挺好的。'},
-  ]},
+    {han:'早抖', jp:'zou2 tau2', mand:'晚安', ex:'听日见，早抖。', exjp:'ting1 jat6 gin3, zou2 tau2.', exmand:'明天见，晚安。'},
+    {han:'努力', jp:'nou5 lik6', mand:'加油', ex:'努力啲，实得嘅！', exjp:'nou5 lik6 di1, sat6 dak1 ge3!', exmand:'再努力点，一定能行！'},
+    {han:'保重', jp:'bou2 zung6', mand:'保重', ex:'你保重身体呀。', exjp:'nei5 bou2 zung6 san1 tai2 aa3.', exmand:'你保重身体啊。'},
+    {han:'失陪', jp:'sat1 pui4', mand:'失陪', ex:'我有啲事，失陪先。', exjp:'ngo5 jau5 di1 si6, sat1 pui4 sin1.', exmand:'我有点事，先失陪了。'},  ]},
 {
   id:'family', name:'家庭', icon:'👨‍👩‍👧', words:[
     {han:'老豆', jp:'lou5 dau6', mand:'爸爸', ex:'我老豆好中意饮茶。', exjp:'ngo5 lou5 dau6 hou2 zung1 ji3 jam2 caa4.', exmand:'我爸爸很喜欢喝早茶。'},
@@ -174,7 +189,10 @@ vocabCategories: [
     {han:'老公', jp:'lou5 gung1', mand:'老公', ex:'我老公煮嘢好叻。', exjp:'ngo5 lou5 gung1 zyu2 je5 hou2 lek1.', exmand:'我老公很会做饭。'},
     {han:'仔', jp:'zai2', mand:'儿子', ex:'我个仔读小学。', exjp:'ngo5 go3 zai2 duk6 siu2 hok6.', exmand:'我儿子上小学。'},
     {han:'女', jp:'neoi5', mand:'女儿', ex:'我个女好乖。', exjp:'ngo5 go3 neoi5 hou2 gwaai1.', exmand:'我女儿很乖。'},
-  ]},
+    {han:'表姐', jp:'biu2 ze1', mand:'表姐', ex:'表姐喺广州做嘢。', exjp:'biu2 ze1 hai2 gwong2 zau1 zou6 je5.', exmand:'表姐在广州工作。'},
+    {han:'堂哥', jp:'tong4 go1', mand:'堂哥', ex:'堂哥结婚喇。', exjp:'tong4 go1 git3 fan1 laa3.', exmand:'堂哥结婚了。'},
+    {han:'新抱', jp:'san1 pou5', mand:'儿媳妇', ex:'佢新抱好孝顺。', exjp:'keoi5 san1 pou5 hou2 haau3 seon6.', exmand:'他儿媳妇很孝顺。'},
+    {han:'女婿', jp:'neoi5 sai3', mand:'女婿', ex:'女婿请食饭。', exjp:'neoi5 sai3 ceng2 sik6 faan6.', exmand:'女婿请吃饭。'},  ]},
 {
   id:'weather', name:'天气', icon:'🌧️', words:[
     {han:'天气', jp:'tin1 hei3', mand:'天气', ex:'今日天气好好。', exjp:'gam1 jat6 tin1 hei3 hou2 hou2.', exmand:'今天天气很好。'},
@@ -187,7 +205,10 @@ vocabCategories: [
     {han:'阴天', jp:'jam1 tin1', mand:'阴天', ex:'阴天冇太阳，好舒服。', exjp:'jam1 tin1 mou5 taai3 joeng4, hou2 syu1 fuk6.', exmand:'阴天没太阳，很舒服。'},
     {han:'打雷', jp:'daa2 leoi4', mand:'打雷', ex:'打雷落大雨。', exjp:'daa2 leoi4 lok6 daai6 jyu5.', exmand:'打雷下大雨。'},
     {han:'彩虹', jp:'coi2 hung4', mand:'彩虹', ex:'雨后有彩虹。', exjp:'jyu5 hau6 jau5 coi2 hung4.', exmand:'雨后出彩虹。'},
-  ]},
+    {han:'天气预报', jp:'tin1 hei3 bou3 gou3', mand:'天气预报', ex:'天气预报话听日落雨。', exjp:'tin1 hei3 bou3 gou3 waa6 ting1 jat6 lok6 jyu5.', exmand:'天气预报说明天下雨。'},
+    {han:'台风', jp:'toi4 fung1', mand:'台风', ex:'台风到，记得关窗。', exjp:'toi4 fung1 dou3, gei3 dak1 gwaan1 coeng1.', exmand:'台风来了，记得关窗。'},
+    {han:'雷暴', jp:'leoi4 bou6', mand:'雷暴', ex:'今晚有雷暴。', exjp:'gam1 maan5 jau5 leoi4 bou6.', exmand:'今晚有雷暴。'},
+    {han:'凉爽', jp:'loeng4 song2', mand:'凉爽', ex:'秋天凉爽好多。', exjp:'cau1 tin1 loeng4 song2 hou2 do1.', exmand:'秋天凉爽很多。'},  ]},
 {
   id:'time', name:'时间', icon:'🕐', words:[
     {han:'而家', jp:'ji4 gaa1', mand:'现在', ex:'而家几点？', exjp:'ji4 gaa1 gei2 dim2?', exmand:'现在几点？'},
@@ -202,6 +223,10 @@ vocabCategories: [
     {han:'一分钟', jp:'jat1 fan1 zung1', mand:'一分钟', ex:'等我一分钟。', exjp:'dang2 ngo5 jat1 fan1 zung1.', exmand:'等我一下。'},
     {han:'礼拜', jp:'lai5 baai3', mand:'星期', ex:'礼拜六去街。', exjp:'lai5 baai3 luk6 heoi3 gaai1.', exmand:'星期六逛街。'},
     {han:'依家', jp:'ji1 gaa1', mand:'现在（口语）', ex:'依家冇时间。', exjp:'ji1 gaa1 mou5 si4 gaan3.', exmand:'现在没时间。'},
+    {han:'前日', jp:'cin4 jat6', mand:'前天', ex:'前日我去咗深圳。', exjp:'cin4 jat6 ngo5 heoi3 zo2 sam1 zan3.', exmand:'前天我去了深圳。'},
+    {han:'后日', jp:'hau6 jat6', mand:'后天', ex:'后日先得闲。', exjp:'hau6 jat6 sin1 dak1 haan4.', exmand:'后天才有空。'},
+    {han:'星期日', jp:'sing1 kei4 jat6', mand:'星期天', ex:'星期日放假。', exjp:'sing1 kei4 jat6 fong3 gaa3.', exmand:'星期天放假。'},
+    {han:'半夜', jp:'bun3 je6', mand:'半夜', ex:'半夜都唔瞓。', exjp:'bun3 je6 dou1 m4 fan3.', exmand:'半夜还不睡。'}
   ]},
 {
   id:'numbers', name:'数字', icon:'🔢', words:[
@@ -217,6 +242,40 @@ vocabCategories: [
     {han:'十', jp:'sap6', mand:'十', ex:'十蚊找返两蚊。', exjp:'sap6 man1 zaau2 faan1 loeng5 man1.', exmand:'十块钱找两块。'},
     {han:'百', jp:'baak3', mand:'百', ex:'呢件衫要几百蚊。', exjp:'ni1 gin6 saam1 jiu3 gei2 baak3 man1.', exmand:'这件衣服要几百块。'},
     {han:'万', jp:'maan6', mand:'万', ex:'香港有七百几万人。', exjp:'hoeng1 gong2 jau5 cat1 baak3 gei2 maan6 jan4.', exmand:'香港有七百多万人。'},
+    {han:'十一', jp:'sap6 jat1', mand:'十一', ex:'我住十一楼。', exjp:'ngo5 zyu6 sap6 jat1 lau2.', exmand:'我住十一楼。'},
+    {han:'二十', jp:'ji6 sap6', mand:'二十', ex:'二十蚊可以买。', exjp:'ji6 sap6 man1 ho2 ji5 maai5.', exmand:'二十块可以买。'},
+    {han:'三十', jp:'saa1 sap6', mand:'三十', ex:'佢三十岁。', exjp:'keoi5 saa1 sap6 seoi3.', exmand:'他三十岁。'},
+    {han:'一百', jp:'jat1 baak3', mand:'一百', ex:'一百蚊有找。', exjp:'jat1 baak3 man1 jau5 zaa2.', exmand:'一百块还有找零。'},  ]},
+
+{
+  id:'body', name:'身体部位', icon:'🦵', words:[
+    {han:'头', jp:'tau4', mand:'头', ex:'头有啲痛。', exjp:'tau4 jau5 di1 tung3.', exmand:'头有点痛。'},
+    {han:'眼', jp:'ngaan5', mand:'眼睛', ex:'眼瞓就瞓啦。', exjp:'ngaan5 fan3 zau6 fan3 laa1.', exmand:'困了就睡吧。'},
+    {han:'耳', jp:'ji5', mand:'耳朵', ex:'耳仔好灵。', exjp:'ji5 zai2 hou2 ling4.', exmand:'耳朵很灵。'},
+    {han:'鼻', jp:'bei6', mand:'鼻子', ex:'鼻塞好辛苦。', exjp:'bei6 sak1 hou2 san1 fu2.', exmand:'鼻塞很难受。'},
+    {han:'口', jp:'hau2', mand:'嘴巴', ex:'开口讲粤语啦。', exjp:'hoi1 hau2 gong2 jyut6 jyu5 laa1.', exmand:'开口说粤语吧。'},
+    {han:'牙', jp:'ngaa4', mand:'牙齿', ex:'刷咗牙未呀？', exjp:'caat3 zo2 ngaa4 mei6 aa3?', exmand:'刷牙了没？'},
+    {han:'手', jp:'sau2', mand:'手', ex:'手袋唔记得带。', exjp:'sau2 doi6 m4 gei3 dak1 daai3.', exmand:'手提包忘了带。'},
+    {han:'脚', jp:'goek3', mand:'脚', ex:'运动完脚好攰。', exjp:'wan6 dung6 jyun4 goek3 hou2 gui6.', exmand:'运动完腿很累。'},
+    {han:'心', jp:'sam1', mand:'心', ex:'个心跳得好快。', exjp:'go3 sam1 tiu3 dak1 hou2 faai3.', exmand:'心跳得很快。'},
+    {han:'肚', jp:'tou5', mand:'肚子', ex:'肚饿啦，去食饭。', exjp:'tou5 ngo6 laa1, heoi3 sik6 faan6.', exmand:'肚子饿了，去吃饭。'},
+    {han:'头发', jp:'tau4 faat3', mand:'头发', ex:'头发好长，要剪喇。', exjp:'tau4 faat3 hou2 coeng4, jiu3 zin2 laa3.', exmand:'头发很长，该剪了。'},
+    {han:'膊头', jp:'bok3 tau4', mand:'肩膀', ex:'膊头有啲紧。', exjp:'bok3 tau4 jau5 di1 gan2.', exmand:'肩膀有点紧。'},
+  ]},
+{
+  id:'school', name:'校园学习', icon:'🎒', words:[
+    {han:'学校', jp:'hok6 haau6', mand:'学校', ex:'学校几点放学？', exjp:'hok6 haau6 gei2 dim2 fong3 hok6?', exmand:'学校几点放学？'},
+    {han:'老师', jp:'lou5 si1', mand:'老师', ex:'老师好严格。', exjp:'lou5 si1 hou2 jim4 gaak3.', exmand:'老师很严格。'},
+    {han:'学生', jp:'hok6 saang1', mand:'学生', ex:'学生证带咗未？', exjp:'hok6 saang1 zing3 daai3 zo2 mei6?', exmand:'学生证带了没？'},
+    {han:'同学', jp:'tung4 hok6', mand:'同学', ex:'我同佢系同学。', exjp:'ngo5 tung4 keoi5 hai6 tung4 hok6.', exmand:'我和他是同学。'},
+    {han:'课本', jp:'fo3 bun2', mand:'课本', ex:'课本喺书包度。', exjp:'fo3 bun2 hai2 syu1 baau1 dou6.', exmand:'课本在书包里。'},
+    {han:'书包', jp:'syu1 baau1', mand:'书包', ex:'书包好重。', exjp:'syu1 baau1 hou2 cung5.', exmand:'书包很重。'},
+    {han:'铅笔', jp:'jyun4 bat1', mand:'铅笔', ex:'借支铅笔用下。', exjp:'ze3 zi1 jyun4 bat1 jung6 haa5.', exmand:'借支铅笔用一下。'},
+    {han:'写字', jp:'se2 zi6', mand:'写字', ex:'学写字要慢慢嚟。', exjp:'hok6 se2 zi6 jiu3 maan6 maan6 lai4.', exmand:'学写字要慢慢来。'},
+    {han:'读书', jp:'duk6 syu1', mand:'读书', ex:'细路仔要读书。', exjp:'sai3 lou6 zai2 jiu3 duk6 syu1.', exmand:'小孩子要读书。'},
+    {han:'考试', jp:'haau2 si3', mand:'考试', ex:'考试之前要温书。', exjp:'haau2 si3 zi1 cin4 jiu3 wan1 syu1.', exmand:'考试之前要复习。'},
+    {han:'作业', jp:'zok3 jip6', mand:'作业', ex:'今日作业多唔多？', exjp:'gam1 jat6 zok3 jip6 do1 m4 do1?', exmand:'今天作业多不多？'},
+    {han:'放假', jp:'fong3 gaa3', mand:'放假', ex:'放暑假去旅行。', exjp:'fong3 syu3 gaa3 heoi3 leoi5 hang4.', exmand:'放暑假去旅行。'},
   ]},
 ],
 
@@ -229,7 +288,7 @@ dialogues: [
     {speaker:'侍应', han:'饮咩茶呀？', jp:'jam2 me1 caa4 aa3?', mand:'喝什么茶呀？'},
     {speaker:'食客', han:'普洱啦。', jp:'pou2 lei2 laa1.', mand:'普洱吧。'},
     {speaker:'侍应', han:'要啲咩点心？', jp:'jiu3 di1 me1 dim2 sam1?', mand:'要点什么点心？'},
-    {speaker:'食客', han:'虾饺同烧卖，仲要一碟肠粉。', jp:'haa1 gaau2 tung4 siu1 maai2, zung6 jiu3 jat1 dip6 coeng2 fan2.', mand:'虾饺和烧麦，还要一碟肠粉。'},
+    {speaker:'食客', han:'虾饺同烧卖，仲要一碟肠粉。', jp:'haa1 gaau2 tung4 siu1 maai6, zung6 jiu3 jat1 dip6 coeng2 fan2.', mand:'虾饺和烧麦，还要一碟肠粉。'},
     {speaker:'侍应', han:'好，唔该稍等。', jp:'hou2, m4 goi1 saau1 dang2.', mand:'好的，请稍等。'},
     {speaker:'食客', han:'唔该，埋单！', jp:'m4 goi1, maai4 daan1!', mand:'麻烦，买单！'},
     {speaker:'侍应', han:'盛惠八十八蚊。', jp:'sing6 wai6 baat3 sap6 baat3 man1.', mand:'一共八十八块。'},
@@ -431,14 +490,23 @@ culture: {
     {han:'食得咸鱼抵得渴', jp:'sik6 dak1 haam4 jyu2 dai2 dak1 hot3', meaning:'敢做就要敢当，拿了好处就要承担后果。', story:'吃了咸鱼就要忍得住口渴。比喻既然选择了一条路，就要接受它带来的麻烦。'},
     {han:'执输行头，惨过败家', jp:'zap1 syu1 haang4 tau4, caam2 gwo3 baai6 gaa1', meaning:'样样落后于人，比败家更惨。', story:'执输=吃亏落后；行头=走在最前（此处反语）。事事抢不到先机，比挥霍家产还惨，提醒人要进取。'},
     {han:'苏州过后无艇搭', jp:'sou1 zau1 gwo3 hau6 mou4 teng5 daap3', meaning:'机不可失，时不再来。', story:'以前坐船去苏州，错过了就没船了。比喻机会稍纵即逝，要当机立断。'},
-  ],
+    {han:'朝朝早，饮早茶', jp:'ziu1 ziu1 zou2, jam2 zou2 caa4', meaning:'天天早晨喝早茶，日子过得悠闲。', story:'广东人一天从"叹早茶"开始，一盅两件慢慢叹，是一种刻在骨子里的生活态度。'},
+    {han:'一世人两兄弟', jp:'jat1 sai3 jan4 loeng5 hing1 dai6', meaning:'一辈子两兄弟，手足情深。', story:'粤语"一世人"=一辈子。强调兄弟情谊要珍惜一辈子，常用来形容过命交情。'},
+    {han:'见高拜，见低踩', jp:'gin3 gou1 baai3, gin3 dai1 caai2', meaning:'见高就拜，见低就踩（势利眼）。', story:'对上阿谀奉承，对下踩低欺压，讽刺趋炎附势的势利小人。'},
+    {han:'偷鸡唔到蚀揸米', jp:'tau1 gai1 m4 dou3 sit6 zaa1 mai5', meaning:'偷鸡不成蚀把米。', story:'想偷鸡没偷着，反而搭进去一把米。比喻想占便宜反倒吃了亏。'},
+    {han:'死鸡撑饭盖', jp:'sei2 gai1 caang3 faan6 goi3', meaning:'死鸭子嘴硬。', story:'鸡都死了还硬撑着锅盖。比喻明知理亏却死不认错，嘴硬到底。'},
+    {han:'十个光头九个富', jp:'sap6 go3 gwong1 tau4 gau2 go3 fu3', meaning:'十个光头九个富。', story:'民间戏谑的说法：光头的人多半有钱。茶楼里最常见的玩笑开场白之一。'},  ],
   xiehou: [
     {front:'老公泼扇', back:'凄（妻）凉', jp:'lou5 gung1 put3 sin3 — cat1 loeng4', meaning:'形容处境凄凉、寒酸。', story:'老公给老婆扇扇子——"妻凉"谐音"凄凉"，一语双关，冷幽默十足。'},
     {front:'哑巴食黄连', back:'有苦自己知', jp:'aa2 baa1 sik6 wong4 lin4 — jau5 fu2 zi6 gei2 zi1', meaning:'有苦说不出，只能自己扛。', story:'黄连极苦，哑巴吃了说不出，只能自己知道。粤语版比普通话版更强调"自己扛"。'},
     {front:'老鼠拉龟', back:'冇哂符', jp:'lou2 syu2 laai1 gwai1 — mou5 saai3 fu4', meaning:'无从下手，无计可施。', story:'老鼠想拖走乌龟，龟壳太滑太硬，怎么都使不上劲——"冇哂符"= 没辙了。'},
     {front:'茶楼搬家', back:'另起炉灶', jp:'caa4 lau2 bun1 gaa1 — ling6 hei2 lou4 zou3', meaning:'另起炉灶，重新开始。', story:'茶楼搬走，蒸笼炉灶自然要重新搭。比喻放弃旧摊子，从头再来。'},
     {front:'猫儿洗面', back:'咁上吓', jp:'maau1 ji4 sai2 min6 — gam3 soeng5 haa5', meaning:'随便应付，敷衍了事。', story:'猫洗脸只是随意抹两下，哪算认真洗？"咁上吓"= 差不多应付过去。'},
-  ],
+    {front:'阎罗王嫁女', back:'鬼要', jp:'jip4 lo4 wong4 gaa3 neoi5 — gwai2 jiu3', meaning:'没人要、没人稀罕。', story:'阎罗王嫁女儿，只有鬼才要。讽刺东西太差或人缘太差，没人愿意接手。'},
+    {front:'铁公鸡', back:'一毛不拔', jp:'tit3 gung1 gai1 — jat1 mou4 bat1 bat6', meaning:'极其吝啬。', story:'铁做的公鸡，毛都拔不下来。形容一毛不拔的守财奴。'},
+    {front:'盲人点灯', back:'白费蜡', jp:'maang4 jan4 dim2 dang1 — baak6 fai3 laap6', meaning:'白费功夫。', story:'瞎子点灯，浪费蜡烛。比喻做了也没用、白折腾的事。'},
+    {front:'黄皮树了哥', back:'唔熟唔食', jp:'wong4 pei4 syu6 liu1 go1 — m4 suk6 m4 sik6', meaning:'专坑熟人。', story:'黄皮树上的八哥专挑熟的果子吃，谐音"唔熟唔食"——专挑熟识的人下手。'},
+    {front:'阿茂整饼', back:'冇嗰样整嗰样', jp:'aa3 mau6 zing2 beng2 — mou5 go2 joeng6 zing2 go2 joeng6', meaning:'多管闲事、没事找事。', story:'阿茂做饼，缺哪样就做哪样，后来引申为没那样偏做那样，多此一举。'},  ],
   life: [
     {title:'茶餐厅：丝袜奶茶与暗语', tag:'饮食', desc:'丝袜奶茶、鸳鸯、飞冰、走糖、多士……茶餐厅有自己的语言系统。', story:'茶餐厅是香港的"平民食堂"：奶茶用丝袜滤网反复撞茶，香浓顺滑；"飞冰"=不要冰块，"走糖"=不加糖。点一份"常餐"（套餐），就是最地道的港式体验。'},
     {title:'叮叮车：百年电车', tag:'交通', desc:'1904年开到今天的香港电车，因"叮叮"的铃声得名。', story:'沿着港岛北岸缓缓穿行的双层电车，是香港最便宜的观光方式。坐上层前排，吹着海风看街景，是本地人的怀旧仪式。'},
@@ -448,6 +516,40 @@ culture: {
     {title:'盆菜：围村大宴', tag:'习俗', desc:'新界围村的传统菜式，一层层堆满好意头。', story:'一个大木盆，由下而上堆着萝卜、猪肉、鸡、鱼、蚝豉，寓意"盆满钵满"。逢年过节，全村围坐一桌，一盆菜吃出团圆味。'},
     {title:'霓虹灯：不夜城的名片', tag:'城市', desc:'密密匝匝的霓虹招牌，曾是香港夜景的标志。', story:'"东方之珠"的夜景，一半靠维港灯光，一半靠街角招牌。如今传统霓虹渐被LED取代，但霓虹仍是香港留给世界的文化符号。'},
     {title:'「一盅两件」叹世界', tag:'饮食', desc:'一壶茶、两件点心，慢慢叹（享受）。', story:'"叹茶"的"叹"是享受的意思。清晨茶楼里，老伯看报，阿婆倾偈，一盅两件可以坐一上午——这种慢，是香港另一种节奏。'},
+    {title:'烧腊铺：斩料加餸', tag:'饮食', desc:'叉烧、烧鹅、白切鸡，买回家"加餸"（加菜）。', story:'"斩料"=到烧腊铺买熟食。家里来客或想加菜就去斩料：烧鹅配姜蓉、叉烧配蜜汁，肥瘦相间一口满足。'},
+    {title:'天星小轮：维港百年渡轮', tag:'交通', desc:'往返尖沙咀与中环的百年渡轮。', story:'1888年启航的天星小轮，是维港最便宜的渡海方式。上层吹海风看两岸摩天楼，下层听轮机声看浪花，两种风景两种心情。'},
+    {title:'鸭寮街：淘货圣地', tag:'城市', desc:'深水埗的电子零件与二手市场。', story:'鸭寮街是深水埗的露天市集：二手相机、电子零件、古董、唱片……懂行的人能淘到宝，是港片里市井气最浓的街道之一。'},
+    {title:'兰桂坊：夜色与微醺', tag:'城市', desc:'中环后街的酒吧一条街。', story:'白天是中环写字楼的后巷，入夜变成霓虹闪烁的酒吧街。万圣节、圣诞夜人潮涌涌，是香港夜生活的代名词。'},
+    {title:'幻彩咏香江：维港灯光秀', tag:'城市', desc:'每晚八点的维港灯光音乐汇演。', story:'每晚8点，维港两岸40多座大厦同步亮起灯光音乐秀，游客与本地人一起在星光大道看这幕城市灯光剧。'},
+    {title:'大坑舞火龙：中秋习俗', tag:'习俗', desc:'大坑村中秋舞火龙驱瘟疫。', story:'中秋前后，大坑村上百人舞动插满线香的火龙穿街过巷，源自百年前驱除瘟疫的传说，现已是国家级非遗。'},  ],
+
+  festival: [
+    {han:'派利是', jp:'paai3 lai6 si6', meaning:'新年派红包，寓意大吉大利。', story:'"利是"=红包，已婚人士给未婚者派，图个好意头。"利利是是"=顺顺利利。'},
+    {han:'行花街', jp:'haang4 faa1 gaai1', meaning:'除夕夜逛年宵花市，买年花迎新春。', story:'"年卅晚，行花街"——金桔、桃花、水仙，买一盆好意头回家。花市开到凌晨，人头攒动是广府共同的年味。'},
+    {han:'食团年饭', jp:'sik6 tyun4 nin4 faan6', meaning:'除夕全家围炉，年年有"余"。', story:'团年饭必有鱼（年年有余）、鸡（有计）、发菜蚝豉（发财好市），一家大小齐齐整整，是全年最重要的一餐。'},
+    {han:'睇龙舟', jp:'tai2 lung4 zau1', meaning:'端午赛龙舟，鼓声震天。', story:'端午前后，从赤柱到大澳都有龙舟赛。龙舟手跟着鼓点齐桨，岸上观众呐喊助威，"扒龙舟"是端午重头戏。'},
+    {han:'食粽子', jp:'sik6 zung2 zi2', meaning:'咸甜粽之争，港式粽偏爱咸。', story:'港式粽以咸肉粽为主：糯米包着咸蛋黄、五花肉、冬菇、瑶柱，蒸足几小时，拆开粽叶香气扑鼻。'},
+    {han:'做冬', jp:'zou6 dung1', meaning:'冬至大过年，全家做冬。', story:'广东人重视冬至，认为"冬大过年"。当晚全家围炉打边炉（火锅），寓意团圆温暖。'},
+    {han:'盂兰烧衣', jp:'jyu4 laan4 siu1 ji1', meaning:'农历七月，街头烧衣祭祖。', story:'农历七月是"鬼月"，街头巷尾可见烧衣纸、祭幽魂，戏棚上演神功戏，是岭南独特的民间信仰景观。'},
+    {han:'食盆菜', jp:'sik6 pun4 coi3', meaning:'围村大盆菜，盆满钵满。', story:'新界围村过年过节食盆菜：一盆层层叠叠的菜，由上而下寓意"盆满钵满"，全村同吃一盆，吃的是热闹与团圆。'},
+  ],
+  food: [
+    {title:'鸡蛋仔', tag:'街头小食', desc:'外脆内软的蜂巢状小食。', story:'蛋浆倒进蜂巢状铁模现烤，出炉外脆内软、蛋香扑鼻。趁热掰开，一口一个圆球，是港片里出镜率最高的小食。'},
+    {title:'格仔饼', tag:'街头小食', desc:'夹着炼乳花生的格子饼。', story:'和鸡蛋仔同源的格子形华夫饼，趁热涂牛油、炼乳、花生酱，咬下去外脆内糯，甜到心头。'},
+    {title:'咖喱鱼蛋', tag:'街头小食', desc:'弹牙鱼蛋配浓咖喱汁。', story:'鱼蛋先炸后浸咖喱汁，竹签一串边走边吃，是便利店和街头档的招牌，电影《重庆森林》里就有它。'},
+    {title:'碗仔翅', tag:'街头小食', desc:'平民版"鱼翅羹"。', story:'用粉丝、冬菇、肉丝仿鱼翅熬成的羹，加浙醋、麻油、胡椒粉，几蚊一碗，是"贫民鱼翅"的智慧。'},
+    {title:'鱼蛋粉', tag:'街头小食', desc:'鱼蛋河粉加紫菜。', story:'汤清味鲜：鱼蛋弹牙、鱼片嫩滑，配河粉和紫菜，撒葱花，是港人早餐和宵夜的心头好。'},
+    {title:'烧卖', tag:'街头小食', desc:'鱼蓉烧卖，点心档常客。', story:'港式烧卖以鱼肉为主料，弹牙鲜美，配辣油更好吃。茶楼一盅两件里有它，街头小食档也有它。'},
+    {title:'钵仔糕', tag:'街头小食', desc:'红糖钵仔糕，用竹签挑着吃。', story:'用粘米粉和红糖蒸成，口感Q弹，用竹签沿边挑起，经典吃法是中间戳个洞。传统口味有红豆和白糖两种。'},
+    {title:'车仔面', tag:'街头小食', desc:'自选配料的自由组合面。', story:'以前流动摊档推着车卖面，客人自选鱼蛋、猪皮、萝卜、牛腩等配料，自由组合，一碗面吃出几十种搭配。'},
+  ],
+  tvb: [
+    {han:'做人最紧要开心', jp:'zou6 jan4 zeoi3 gan2 jiu3 hoi1 sam1', meaning:'做人最重要开心。', story:'《溏心风暴》等剧集高频台词，成为港剧"人生哲理"的代表，也是网上最火的粤语梗之一。'},
+    {han:'你讲乜嘢呀', jp:'nei5 gong2 mat1 je5 aa3', meaning:'你说什么呀。', story:'港剧里表达惊讶或疑惑的万能句，语气不同意思不同：可以是疑问，也可以是吐槽。'},
+    {han:'有冇搞错呀', jp:'jau5 mou5 gaau2 co3 aa3', meaning:'有没有搞错。', story:'表达不满或无语的经典台词，配上"瞪眼"表情，是TVB演员的标配表演。'},
+    {han:'唔系挂', jp:'m4 hai6 gwaa3', meaning:'不会吧。', story:'听到难以置信的事时的反应，"挂"是语气词，拖长音效果更佳，网络上常写作"唔系呱"。'},
+    {han:'讲呢啲', jp:'gong2 ni1 di1', meaning:'说这些（见外了）。', story:'《使徒行者》后爆火的金句："讲呢啲"表面是"说这些干嘛"，实际是"咱们谁跟谁，别客气"。'},
+    {han:'世界变晒啦', jp:'sai3 gaai3 bin3 saai3 laa1', meaning:'世界变完了/世道变了。', story:'长辈感叹时代变化的常用语，带点无奈和幽默，是港剧"老戏骨"的经典台词。'},
   ],
 }
 };
