@@ -160,7 +160,7 @@ console.log(bad.length? '❌ '+bad.join('\n') : '✅ 全部对齐');
 ### 修改内容后的发布流程（重要约定）
 
 1. 修改代码/数据
-2. **同步递增缓存版本**：更新 `sw.js` 顶部 `canto-shell-vX`，以及 `index.html` / `sw.js` 中静态资源的 `?v=X`（否则老用户第一次打开可能出现新旧资源混用）
+2. **同步递增缓存版本**：运行 `node scripts/bump-version.mjs` 一键同步三处（sw.js 的 `canto-shell-vX`、sw.js 缓存数组、index.html 资源引用的 `?v=X`），再 `node scripts/verify-data.mjs` 复核（否则老用户可能出现新旧资源混用，且 CI 的 verify-data 会直接报「缓存版本不一致」）
 3. 提交并推送到 `main`：
 
 ```bash
