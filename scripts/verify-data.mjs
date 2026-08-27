@@ -34,7 +34,7 @@ const DATA = load(path.join(ROOT, 'js/data.js'));
 const SONGS = load(path.join(ROOT, 'js/songs.js'));
 
 /* ---- 1. 板块结构 ---- */
-const want = { initials: 19, finals: 55, tones: 9, vocabCategories: 10, dialogues: 6, grammar: 10 };
+const want = { initials: 19, finals: 55, tones: 9, vocabCategories: 11, dialogues: 9, grammar: 10 };
 for (const [k, n] of Object.entries(want)) {
   const got = Array.isArray(DATA[k]) ? DATA[k].length : Object.keys(DATA[k] || {}).length;
   check(got === n, `板块 ${k} 数量 ${got} != 预期 ${n}`);
@@ -43,6 +43,18 @@ for (const k of ['sayings', 'xiehou', 'life', 'festival', 'food', 'tvb']) {
   check(Array.isArray(DATA.culture?.[k]), `culture.${k} 缺失或不是数组`);
 }
 check(DATA.vocabCategories.every(c => c.id && c.name && Array.isArray(c.words) && c.words.length), '存在空的词汇分类');
+check(DATA.dialogues.every(d => d.id && d.title && d.emoji && d.level && d.desc
+  && Array.isArray(d.tags) && d.tags.length
+  && Array.isArray(d.lines) && d.lines.length), '存在结构不完整的对话场景');
+
+for (const d of DATA.dialogues) {
+  for (const [i, line] of d.lines.entries()) {
+    for (const f of ['speaker', 'han', 'jp', 'mand']) {
+      check(typeof line[f] === 'string' && line[f].length > 0,
+        `对话台词缺 ${f}: ${d.title}/第 ${i + 1} 句`);
+    }
+  }
+}
 
 /* ---- 2. 词汇字段完整性 ---- */
 let wordCount = 0;
