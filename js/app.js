@@ -25,34 +25,57 @@ function toast(msg){
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
 }
-function simpleHash(str){
-  let h = 5381;
-  for(let i=0;i<str.length;i++){ h = ((h<<5)+h+str.charCodeAt(i))|0; }
-  return (h>>>0).toString(36);
-}
-
 /* ================= 本地存储 ================= */
 const LS = {
   get(k, d){ try{ const v = localStorage.getItem(k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 };
-const ACCOUNTS_KEY = 'canto_accounts';
-const SESSION_KEY  = 'canto_session';
-
-/* 当前用户 */
-let currentUser = LS.get(SESSION_KEY, null);
-function accounts(){ return LS.get(ACCOUNTS_KEY, {}); }
-function progressKey(u){ return 'canto_progress_' + u; }
-function getProgress(){
-  if(!currentUser) return null;
-  return LS.get(progressKey(currentUser), {
+const PROFILE_KEY = 'canto_profile_v2';
+const LEGACY_SESSION_KEY = 'canto_session';
+function freshProgress(){
+  return {
     favorites:[], learned:[], practices:[], quiz:[], dialogues:[],
     checkins:{}, lastCheckin:null, streak:0,
     goalCount:10, goalDate:null, goalToday:0, goalWords:[],
-    reminder:false, reminderSentDate:null, activities:[]
-  });
+    reminder:false, reminderSentDate:null, activities:[], lastStudyDate:null
+  };
 }
-function saveProgress(p){ if(currentUser) LS.set(progressKey(currentUser), p); }
+function cleanStringList(v){ return Array.isArray(v) ? [...new Set(v.filter(x => typeof x === 'string').slice(0,500))] : []; }
+function normalizeProgress(raw){
+  const d = freshProgress();
+  if(!raw || typeof raw !== 'object' || Array.isArray(raw)) return d;
+  const checkins = {};
+  if(raw.checkins && typeof raw.checkins === 'object'){
+    Object.entries(raw.checkins).slice(0,1500).forEach(([k,v]) => { if(/^\d{4}-\d{2}-\d{2}$/.test(k) && v) checkins[k] = true; });
+  }
+  return {
+    favorites:cleanStringList(raw.favorites), learned:cleanStringList(raw.learned),
+    practices:Array.isArray(raw.practices) ? raw.practices.slice(0,60).map(x => ({ico:String(x?.ico||'🎤').slice(0,12),label:String(x?.label||'练习').slice(0,80),score:Math.max(0,Math.min(100,Number(x?.score)||0)),time:Number(x?.time)||Date.now()})) : [],
+    quiz:Array.isArray(raw.quiz) ? raw.quiz.slice(0,100) : [], dialogues:cleanStringList(raw.dialogues),
+    checkins, lastCheckin:typeof raw.lastCheckin === 'string' ? raw.lastCheckin : null,
+    streak:Math.max(0,Math.min(3650,Number(raw.streak)||0)),
+    goalCount:Math.max(1,Math.min(100,Number(raw.goalCount)||10)),
+    goalDate:typeof raw.goalDate === 'string' ? raw.goalDate : null,
+    goalToday:Math.max(0,Math.min(100,Number(raw.goalToday)||0)), goalWords:cleanStringList(raw.goalWords),
+    reminder:!!raw.reminder, reminderSentDate:typeof raw.reminderSentDate === 'string' ? raw.reminderSentDate : null,
+    activities:Array.isArray(raw.activities) ? raw.activities.slice(0,6).map(x => ({icon:String(x?.icon||'📖').slice(0,12),title:String(x?.title||'学习记录').slice(0,80),sub:String(x?.sub||'').slice(0,120),route:ROUTES[x?.route] ? x.route : 'home',time:Number(x?.time)||Date.now()})) : [],
+    lastStudyDate:typeof raw.lastStudyDate === 'string' ? raw.lastStudyDate : null
+  };
+}
+function migrateLegacyProgress(){
+  if(LS.get(PROFILE_KEY, null)) return;
+  const legacyUser = LS.get(LEGACY_SESSION_KEY, null);
+  const legacy = legacyUser ? LS.get('canto_progress_' + legacyUser, null) : null;
+  if(legacy) LS.set(PROFILE_KEY, normalizeProgress(legacy));
+}
+function getProgress(){
+  return normalizeProgress(LS.get(PROFILE_KEY, freshProgress()));
+}
+function saveProgress(p){ LS.set(PROFILE_KEY, normalizeProgress(p)); }
+function markStudyToday(){
+  const p = getProgress();
+  if(p.lastStudyDate !== todayKey()){ p.lastStudyDate = todayKey(); saveProgress(p); }
+}
 
 /* 全局朗读语速（TTS） */
 let speechRate = LS.get('canto_speech_rate', 0.75);
@@ -190,6 +213,7 @@ function playNextCloud(){
 function speak(text, opts={}){
   const cleaned = cleanForSpeech(text);
   if(!cleaned) return;
+  markStudyToday();
   if(cloudTTS.ready){
     if(!opts.queue) stopSpeak();
     cloudQueue.push({text:cleaned, opts});
@@ -230,7 +254,7 @@ async function initRecorder(){
           const ana = await analyzeBlob(recordedBlob);
           const res = evalRecord(practiceTarget, ana);
           renderFeedback(res, practiceTarget);
-          $('#practiceStatus').textContent = '✅ 评估完成：' + practiceTarget.text;
+          $('#practiceStatus').textContent = '✅ 练习反馈已生成：' + practiceTarget.text;
         }catch(e){
           toast('音频分析失败，请重试');
         }
@@ -272,7 +296,7 @@ async function analyzeBlob(blob){
   ctx.close();
   return {duration: buf.duration, rms};
 }
-/* 评估：时长匹配 + 响度（声调由用户自查参与） */
+/* 练习反馈：只比较时长与响度，声调由用户自查；不判断发音准确性。 */
 let practiceTarget = null; // {text, jp, tonenum}
 function evalRecord(target, analysis){
   const hanLen = cleanForSpeech(target.text).length || 1;
@@ -307,7 +331,7 @@ function renderFeedback(res, target, container){
     if(!tips.length) tips.push('时长、音量都不错！继续对比声调细节，保持练习节奏');
     fb.innerHTML = `
       <div class="fb-box">
-        <div class="fb-score ${cls}">${final}<small style="font-size:14px">分</small></div>
+        <div class="fb-score ${cls}">${final}<small style="font-size:12px;display:block">节奏参考</small></div>
         <div class="fb-detail">
           <div class="fb-meter"><i style="width:${final}%;background:${final>=80?'var(--green)':final>=60?'var(--gold)':'var(--red)'}"></i></div>
           <div class="fb-row">
@@ -329,6 +353,7 @@ function renderFeedback(res, target, container){
           </div>
         </div>
         <div style="width:100%">💡 ${esc(tips.join('；'))}</div>
+        <div class="feedback-boundary">此结果只反映录音时长、音量与自查反馈，不识别粤语发音是否准确。</div>
       </div>`;
     $('#fbPlay').onclick = () => { if(audioEl && recordedUrl) audioEl.play(); };
     $('#fbDemo').onclick = () => speak(target.text);
@@ -343,15 +368,28 @@ function renderFeedback(res, target, container){
 }
 
 /* ================= 路由 ================= */
-const ROUTES = {home:'首页', phonetics:'语音学习', vocab:'场景词汇', dialogues:'对话实战', grammar:'语法专栏', culture:'文化趣知', profile:'学习进度'};
+const ROUTES = {home:'首页', phonetics:'语音学习', vocab:'场景词汇', dialogues:'对话实战', sing:'学唱粤语歌', grammar:'语法专栏', culture:'文化趣知', profile:'学习档案'};
 let currentRoute = 'home';
-function navigate(route){
+function routeFromLocation(){
+  const route = location.hash.replace(/^#\/?/, '');
+  return ROUTES[route] ? route : 'home';
+}
+function navigate(route, options={}){
+  if(!ROUTES[route]) route = 'home';
+  const hash = '#/' + route;
+  if(!options.fromHistory && location.hash !== hash){
+    if(options.replace) history.replaceState({route}, '', hash);
+    else history.pushState({route}, '', hash);
+  }
   currentRoute = route;
+  document.title = route === 'home' ? '粤学堂 · 学粤语' : `${ROUTES[route]} · 粵學堂`;
   $$('.page').forEach(p => p.classList.remove('active'));
   const page = $('#page-' + route);
   if(page) page.classList.add('active');
   $$('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.nav === route));
   $$('.m-nav-item').forEach(n => n.classList.toggle('active', n.dataset.nav === route));
+  const more = $('#mMore');
+  if(more) more.classList.toggle('active', ['sing','grammar','culture'].includes(route));
   window.scrollTo({top:0});
   if(route === 'home') renderHome();
   if(route === 'phonetics') renderPhonetics();
@@ -367,7 +405,8 @@ function navigate(route){
   if(route !== 'grammar'){ $('#grammarArticle').classList.add('hidden'); }
 }
 function logActivity(icon, title, sub, route){
-  const p = getProgress(); if(!p) return;
+  const p = getProgress();
+  p.lastStudyDate = todayKey();
   p.activities = p.activities || [];
   p.activities.unshift({icon, title, sub, route, time:Date.now()});
   p.activities = p.activities.slice(0,6);
@@ -383,13 +422,13 @@ function renderHome(){
   $('#statCulture').textContent = DATA.culture.sayings.length + DATA.culture.xiehou.length + DATA.culture.life.length;
 
   const p = getProgress();
-  if(p){
+  {
     const today = todayKey();
     if(p.goalDate !== today){ p.goalDate = today; p.goalToday = 0; p.goalWords = []; saveProgress(p); }
     const pct = p.goalCount ? Math.min(100, Math.round(p.goalToday / p.goalCount * 100)) : 0;
     $('#goalNum').textContent = p.goalToday;
     $('#goalChip').textContent = p.goalCount ? `每日 ${p.goalCount} 词` : '未设定';
-    $('#goalLine').textContent = p.goalToday >= p.goalCount && p.goalCount ? '🎉 今日目标达成，犀利！' : `今日已学 ${p.goalToday} / ${p.goalCount} 个词汇`;
+    $('#goalLine').textContent = p.goalToday >= p.goalCount && p.goalCount ? '🎉 今日目标达成，犀利！' : `今日已听 ${p.goalToday} / ${p.goalCount} 个词汇`;
     const ring = $('#goalRing');
     ring.style.strokeDashoffset = 326.7 * (1 - pct/100);
     /* 连续打卡 */
@@ -402,36 +441,28 @@ function renderHome(){
     /* 继续学习 */
     const acts = (p.activities||[]).slice(0,3);
     $('#continueList').innerHTML = acts.length ? acts.map(a => `
-      <div class="cont-item" data-nav="${a.route}">
-        <span class="ci-ico">${a.icon}</span>
+      <button class="cont-item" data-nav="${a.route}">
+        <span class="ci-ico">${esc(a.icon)}</span>
         <div><div class="ci-title">${esc(a.title)}</div><div class="ci-sub">${esc(a.sub)}</div></div>
         <span class="ci-arrow">→</span>
-      </div>`).join('') : `<div class="history-empty" style="border:none;padding:14px">还没有学习记录，去逛逛吧～</div>`;
+      </button>`).join('') : `<div class="history-empty" style="border:none;padding:14px">还没有学习记录，先从发音或场景词汇开始吧～</div>`;
     $$('#continueList .cont-item').forEach(el => el.onclick = () => navigate(el.dataset.nav));
-  } else {
-    $('#goalChip').textContent = '未登录';
-    $('#goalRing').style.strokeDashoffset = 326.7;
-    $('#goalNum').textContent = '—';
-    $('#goalLine').textContent = '注册登录后即可记录进度、打卡和设定每日目标。';
-    $('#streakChip').textContent = '0 天';
-    $('#streakWeek').innerHTML = last7().map(d=>`<div class="streak-day ${d.isToday?'today':''}"><span class="sd-ico">${d.isToday?'📌':'·'}</span>${d.label}</div>`).join('');
-    $('#continueList').innerHTML = `<div class="history-empty" style="border:none;padding:14px">登录后这里会显示你的学习足迹</div>`;
   }
   /* 模块入口 */
   const mods = [
     {ico:'🎙️', t:'语音学习', d:'粤拼声母 · 韵母 · 声调，录音对比发音', nav:'phonetics'},
-    {ico:'📖', t:'场景词汇', d:'8 大生活场景，92 个高频词 + 听力小测', nav:'vocab'},
+    {ico:'📖', t:'场景词汇', d:`8 大生活场景，${totalWords} 个高频词 + 听力小测`, nav:'vocab'},
     {ico:'💬', t:'对话实战', d:'茶楼点餐、街市买菜，跟读 + 角色扮演', nav:'dialogues'},
     {ico:'🎵', t:'学唱粤语歌', d:'11 首经典金曲全曲歌词，逐句跟唱练咬字', nav:'sing'},
     {ico:'🧩', t:'语法专栏', d:'量词 · 语气词 · 体貌助词，十讲吃透', nav:'grammar'},
     {ico:'🏮', t:'文化趣知', d:'俗语歇后语，港式生活冷知识', nav:'culture'},
-    {ico:'📊', t:'学习进度', d:'目标 · 打卡 · 收藏 · 练习历史', nav:'profile'},
+    {ico:'📊', t:'学习档案', d:'目标 · 打卡 · 收藏 · 练习历史 · 本机备份', nav:'profile'},
   ];
   $('#moduleGrid').innerHTML = mods.map(m => `
-    <div class="mod-card" data-nav="${m.nav}">
+    <button class="mod-card" data-nav="${m.nav}">
       <div class="mc-ico">${m.ico}</div>
       <h3>${m.t}</h3><p>${m.d}</p><span class="mc-go">进入 →</span>
-    </div>`).join('');
+    </button>`).join('');
   $$('#moduleGrid .mod-card').forEach(el => el.onclick = () => navigate(el.dataset.nav));
 }
 function last7(){
@@ -445,8 +476,8 @@ function last7(){
 }
 function checkin(){
   const p = getProgress();
-  if(!p){ toast('请先注册登录再打卡'); navigate('profile'); return; }
   const today = todayKey();
+  if(p.lastStudyDate !== today){ toast('先完成一次听读或练习，再来打卡吧'); return; }
   if(p.checkins[today]){ toast('今日已经打过卡啦 ✅'); return; }
   p.checkins[today] = true;
   p.lastCheckin = today;
@@ -481,12 +512,12 @@ function renderPhGrid(){
   else items = DATA.tones.map(t => ({sym:t.num, sub:t.contour, ex:t.ex, exjp:t.exjp, tone:t}));
   if(q) items = items.filter(i => (i.sym+qString(i)).toLowerCase().includes(q));
   $('#phGrid').innerHTML = items.map((it,idx) => `
-    <div class="ph-card ${phSel && phSel.sym===it.sym && phSel.tab===phTab?'sel':''}" data-idx="${idx}" style="animation:pageIn .4s ${idx*0.015}s backwards">
+    <button class="ph-card ${phSel && phSel.sym===it.sym && phSel.tab===phTab?'sel':''}" data-idx="${idx}" style="animation:pageIn .4s ${idx*0.015}s backwards" aria-label="播放 ${esc(it.sym)}，例字 ${esc(it.ex)}">
       <span class="pc-vol">🔊</span>
       <div class="pc-sym">${it.sym}</div>
       <div class="pc-jp">${it.sub}</div>
       <div class="pc-ex">${it.ex}</div>
-    </div>`).join('') || '<div class="history-empty" style="grid-column:1/-1">没有匹配的音标</div>';
+    </button>`).join('') || '<div class="history-empty" style="grid-column:1/-1">没有匹配的音标</div>';
   $$('#phGrid .ph-card').forEach(card => {
     card.onclick = () => {
       const it = items[+card.dataset.idx];
@@ -582,7 +613,6 @@ function markWordLearned(catId, w){
 }
 function toggleFav(catId, w, card){
   const p = getProgress();
-  if(!p){ toast('请先注册登录，才能收藏生词'); navigate('profile'); return; }
   const key = catId + ':' + w.han;
   const i = p.favorites.indexOf(key);
   if(i >= 0){ p.favorites.splice(i,1); $('.wc-fav', card).textContent = '☆'; $('.wc-fav', card).classList.remove('on'); toast('已取消收藏'); }
@@ -593,7 +623,6 @@ function toggleFav(catId, w, card){
 /* 听力小测 */
 function openQuiz(){
   const p = getProgress();
-  if(!p){ toast('请先登录再参加小测'); navigate('profile'); return; }
   const all = DATA.vocabCategories.flatMap(c => c.words.map(w => ({...w, cat:c.name})));
   const pool = [...all].sort(() => Math.random() - 0.5).slice(0, 8);
   let qi = 0, score = 0;
@@ -664,7 +693,7 @@ function renderDialogues(){
   $('#dlgCards').innerHTML = DATA.dialogues.map(d => {
     const done = p && p.dialogues.includes(d.id);
     return `
-    <div class="dlg-card" data-id="${d.id}" style="animation:pageIn .4s ${DATA.dialogues.indexOf(d)*0.05}s backwards">
+    <button class="dlg-card" data-id="${d.id}" style="animation:pageIn .4s ${DATA.dialogues.indexOf(d)*0.05}s backwards">
       <span class="dc-emoji">${d.emoji}</span>
       <h3>${d.title}</h3>
       <p>${esc(d.desc)}</p>
@@ -674,7 +703,7 @@ function renderDialogues(){
         ${d.tags.map(t=>`<span class="dc-tag">${t}</span>`).join('')}
       </div>
       ${done ? '<div class="dc-progress" style="width:100%"></div>' : ''}
-    </div>`;
+    </button>`;
   }).join('');
   $$('#dlgCards .dlg-card').forEach(c => c.onclick = () => openDlg(c.dataset.id));
 }
@@ -763,7 +792,7 @@ async function followRecord(i, btn){
       const ana = await analyzeBlob(blob);
       const l = curDlg.lines[i];
       const res = evalRecord({text:l.han}, ana);
-      modalRoot.innerHTML = `<div class="modal-mask"><div class="modal"><h3>🎤 跟读评估 <span class="chip chip-green" style="margin-left:auto">第 ${i+1} 句</span></h3><div id="ptFeedback"></div><div style="text-align:center;margin-top:16px"><button class="btn btn-ghost sm" id="evalClose">关闭</button></div></div></div>`;
+      modalRoot.innerHTML = `<div class="modal-mask"><div class="modal" role="dialog" aria-modal="true" aria-label="跟读练习反馈"><h3>🎤 跟读练习反馈 <span class="chip chip-green" style="margin-left:auto">第 ${i+1} 句</span></h3><div id="ptFeedback"></div><div style="text-align:center;margin-top:16px"><button class="btn btn-ghost sm" id="evalClose">关闭</button></div></div></div>`;
       renderFeedback(res, {text:l.han, jp:l.jp}, $('#ptFeedback'));
       $('#evalClose').onclick = () => { modalRoot.innerHTML = ''; };
       stream.getTracks().forEach(t=>t.stop());
@@ -851,12 +880,12 @@ function renderGrammarArticle(){
     <div class="ga-block">
       <h4>例句练习</h4>
       ${g.examples.map(ex => `
-        <div class="ga-example" data-ex="${esc(ex.han)}">
+        <button class="ga-example" data-ex="${esc(ex.han)}" aria-label="播放例句 ${esc(ex.han)}">
           <span class="ge-play">🔊</span>
           <div class="ge-han">${esc(ex.han)}</div>
           <div class="ge-jp">${ex.jp}</div>
           <div class="ge-mand">${esc(ex.mand)}</div>
-        </div>`).join('')}
+        </button>`).join('')}
     </div>`;
   if(lastGrammarLog !== g.id){ lastGrammarLog = g.id; logActivity('🧩', g.title, '阅读语法专栏', 'grammar'); }
   $$('#grammarArticle .ga-example').forEach(el => el.onclick = () => speak(el.dataset.ex));
@@ -884,57 +913,36 @@ function renderCulture(){
   });
 }
 
-/* ================= 学习进度 / 账号 ================= */
+/* ================= 学习档案 ================= */
+function exportProfile(){
+  const payload = {app:'jyut-cantonese', version:2, exportedAt:new Date().toISOString(), progress:getProgress()};
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `jyut-learning-${todayKey()}.json`; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast('学习档案已导出，请妥善保存');
+}
+async function importProfile(file){
+  try{
+    const parsed = JSON.parse(await file.text());
+    const raw = parsed && parsed.progress ? parsed.progress : parsed;
+    if(!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('invalid');
+    if(!confirm('导入会覆盖当前设备上的学习档案，确定继续吗？')) return;
+    saveProgress(normalizeProgress(raw));
+    toast('学习档案已恢复');
+    renderProfile(); renderHome();
+  }catch(_){ toast('无法读取这份学习档案，请确认文件格式'); }
+}
+function resetProfile(){
+  if(!confirm('确定清除当前设备上的进度、收藏、打卡和练习历史吗？此操作无法撤销。')) return;
+  localStorage.removeItem(PROFILE_KEY);
+  toast('本机学习档案已清除');
+  renderProfile(); renderHome();
+}
 function renderProfile(){
   const body = $('#profileBody');
-  if(!currentUser){
-    body.innerHTML = `
-      <div class="auth-wrap">
-        <div class="auth-card">
-          <h3>${authMode==='login'?'登入':'注册'} · 粵學堂</h3>
-          <p class="auth-sub">本地账号（数据保存在浏览器），登录后可记录进度、收藏与打卡</p>
-          <div class="field"><label>用户名</label><input id="auName" placeholder="输入用户名" autocomplete="off"></div>
-          ${authMode==='register' ? `<div class="field"><label>昵称（可选）</label><input id="auNick" placeholder="怎么称呼你" autocomplete="off"></div>` : ''}
-          <div class="field"><label>密码</label><input id="auPass" type="password" placeholder="${authMode==='register'?'设置密码（至少4位）':'输入密码'}"></div>
-          ${authMode==='register' ? `<div class="field"><label>确认密码</label><input id="auPass2" type="password" placeholder="再输入一次"></div>` : ''}
-          <div class="auth-err" id="authErr"></div>
-          <button class="btn btn-primary" style="width:100%;justify-content:center" id="authSubmit">${authMode==='login'?'登 入':'注 册'}</button>
-          <div class="auth-switch">${authMode==='login'?'还没有账号？':'已有账号？'} <button id="authToggle">${authMode==='login'?'去注册':'去登录'}</button></div>
-        </div>
-      </div>`;
-    const err = $('#authErr');
-    $('#authToggle').onclick = () => { authMode = authMode==='login'?'register':'login'; renderProfile(); };
-    $('#authSubmit').onclick = () => {
-      const name = $('#auName').value.trim();
-      const pass = $('#auPass').value;
-      if(authMode === 'register'){
-        const nick = $('#auNick').value.trim();
-        const pass2 = $('#auPass2').value;
-        if(name.length < 2) return err.textContent = '用户名至少 2 个字符';
-        if(pass.length < 4) return err.textContent = '密码至少 4 位';
-        if(pass !== pass2) return err.textContent = '两次密码不一致';
-        const acc = accounts();
-        if(acc[name]) return err.textContent = '用户名已存在，换一个吧';
-        acc[name] = {hash: simpleHash(pass), nick: nick || name, createdAt: Date.now()};
-        LS.set(ACCOUNTS_KEY, acc);
-        currentUser = name;
-        LS.set(SESSION_KEY, name);
-        toast('注册成功，欢迎你，' + nick + '！🎉');
-        renderProfile(); renderHome();
-      } else {
-        const acc = accounts();
-        if(!acc[name]) return err.textContent = '用户不存在';
-        if(acc[name].hash !== simpleHash(pass)) return err.textContent = '密码错误';
-        currentUser = name;
-        LS.set(SESSION_KEY, name);
-        toast('欢迎回来，' + acc[name].nick + '！');
-        renderProfile(); renderHome();
-      }
-    };
-    return;
-  }
   const p = getProgress();
-  const user = accounts()[currentUser];
   const favItems = p.favorites.map(k => {
     const [cid, han] = k.split(':');
     const cat = DATA.vocabCategories.find(c => c.id===cid);
@@ -946,39 +954,35 @@ function renderProfile(){
 
   body.innerHTML = `
     <div class="profile-grid">
-      <div class="stat-card"><div class="sc-ico">📚</div><b>${p.learned.length}</b><span>已学词汇</span></div>
+      <div class="stat-card"><div class="sc-ico">🔊</div><b>${p.learned.length}</b><span>听过的词汇</span></div>
       <div class="stat-card"><div class="sc-ico">⭐</div><b>${p.favorites.length}</b><span>收藏生词</span></div>
       <div class="stat-card"><div class="sc-ico">🎤</div><b>${p.practices.length}</b><span>练习次数</span></div>
-      <div class="stat-card"><div class="sc-ico">💬</div><b>${p.dialogues.length}/${DATA.dialogues.length}</b><span>完成对话</span></div>
+      <div class="stat-card"><div class="sc-ico">💬</div><b>${p.dialogues.length}/${DATA.dialogues.length}</b><span>体验过的对话</span></div>
       <div class="stat-card"><div class="sc-ico">🔥</div><b>${p.streak}</b><span>连续打卡（天）</span></div>
       <div class="stat-card"><div class="sc-ico">🎯</div><b>${p.goalToday}/${p.goalCount}</b><span>今日目标</span></div>
     </div>
     <div class="profile-cols">
       <div class="profile-col">
-        <h3>🎯 每日目标与提醒</h3>
+        <h3>🎯 每日目标</h3>
         <div class="setting-row">
           <div><div class="sr-label">每日学习目标</div><div class="sr-sub">每天要学多少个词汇</div></div>
           <div class="num-stepper">
-            <button id="goalMinus">−</button><b id="goalVal">${p.goalCount}</b><button id="goalPlus">+</button>
+            <button id="goalMinus" aria-label="减少每日目标">−</button><b id="goalVal">${p.goalCount}</b><button id="goalPlus" aria-label="增加每日目标">+</button>
           </div>
         </div>
         <div class="setting-row">
-          <div><div class="sr-label">每日提醒</div><div class="sr-sub">当天目标未达成时通知你</div></div>
-          <button class="switch ${p.reminder?'on':''}" id="remindSwitch"></button>
+          <div><div class="sr-label">打开网站时提醒</div><div class="sr-sub">当天目标未达成时，在本站内提示一次</div></div>
+          <button class="switch ${p.reminder?'on':''}" id="remindSwitch" aria-label="打开网站时提醒" aria-pressed="${p.reminder}"></button>
         </div>
         <div class="setting-row">
           <div><div class="sr-label">今日打卡</div><div class="sr-sub">${p.checkins[today] ? '今日已打卡 ✅' : '还没打卡，记得点一下'}</div></div>
           <button class="btn btn-soft sm" id="checkinBtn2">${p.checkins[today]?'✓ 已打卡':'✍️ 打卡'}</button>
         </div>
-        <div class="setting-row">
-          <div><div class="sr-label">账号：${esc(user.nick || currentUser)}</div><div class="sr-sub">注册于 ${new Date(user.createdAt).toLocaleDateString()}</div></div>
-          <button class="btn btn-ghost sm" id="logoutBtn">退出登录</button>
-        </div>
       </div>
       <div class="profile-col">
         <h3>⭐ 收藏生词</h3>
         ${favItems.length ? `<div class="fav-list">${favItems.map(f => `
-          <div class="fav-item" data-cat="${f.cat.id}">
+          <div class="fav-item" data-cat="${f.cat.id}" role="button" tabindex="0" aria-label="打开 ${esc(f.w.han)} 所在词汇分类">
             <span class="fi-han">${f.w.han}</span>
             <span class="fi-jp">${f.w.jp} · ${esc(f.w.mand)}</span>
             <button class="fi-del" title="删除">✕</button>
@@ -988,30 +992,37 @@ function renderProfile(){
         <h3>📋 练习历史</h3>
         ${p.practices.length ? p.practices.slice(0,12).map(h => `
           <div class="history-item">
-            <span class="hi-ico">${h.ico}</span>
+            <span class="hi-ico">${esc(h.ico)}</span>
             <span class="hi-what">${esc(h.label)}</span>
             <span class="hi-time">${new Date(h.time).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
-            <span class="hi-score">${h.score} 分</span>
+            <span class="hi-score">节奏 ${h.score}</span>
           </div>`).join('') : '<div class="history-empty">还没有练习记录，去语音页录一段试试吧</div>'}
+      </div>
+      <div class="profile-col profile-backup" style="grid-column:1/-1">
+        <h3>💾 本机档案与备份</h3>
+        <p>无需注册，进度会自动保存在当前设备。清理浏览器数据或换设备前，请先导出档案；录音不会写入档案。</p>
+        <div class="profile-actions">
+          <button class="btn btn-primary sm" id="profileExport">⬇️ 导出档案</button>
+          <button class="btn btn-ghost sm" id="profileImport">⬆️ 导入档案</button>
+          <button class="btn btn-ghost sm danger" id="profileReset">清除本机档案</button>
+          <input id="profileFile" class="hidden" type="file" accept="application/json,.json">
+        </div>
+        <div class="profile-cloud-note">云端同步尚未开放；后续会作为可选能力提供，不影响当前学习。</div>
       </div>
     </div>`;
   /* 事件 */
   $('#goalMinus').onclick = () => { p.goalCount = Math.max(1, p.goalCount-1); saveProgress(p); $('#goalVal').textContent = p.goalCount; };
   $('#goalPlus').onclick = () => { p.goalCount = Math.min(100, p.goalCount+1); saveProgress(p); $('#goalVal').textContent = p.goalCount; };
-  $('#remindSwitch').onclick = async () => {
+  $('#remindSwitch').onclick = () => {
     p.reminder = !p.reminder;
-    if(p.reminder){
-      if(!('Notification' in window)){ p.reminder = false; toast('浏览器不支持通知'); }
-      else {
-        const perm = await Notification.requestPermission();
-        if(perm !== 'granted'){ p.reminder = false; toast('未获得通知权限，可在浏览器设置开启'); }
-        else toast('提醒已开启 🔔');
-      }
-    } else toast('提醒已关闭');
+    toast(p.reminder ? '打开网站时提醒已开启' : '提醒已关闭');
     saveProgress(p); renderProfile();
   };
   const c2 = $('#checkinBtn2'); if(c2) c2.onclick = checkin;
-  $('#logoutBtn').onclick = () => { currentUser = null; LS.set(SESSION_KEY, null); toast('已退出登录'); renderProfile(); renderHome(); };
+  $('#profileExport').onclick = exportProfile;
+  $('#profileImport').onclick = () => $('#profileFile').click();
+  $('#profileFile').onchange = e => { const f = e.target.files[0]; if(f) importProfile(f); e.target.value=''; };
+  $('#profileReset').onclick = resetProfile;
   $$('#profileBody .fav-item').forEach(el => {
     el.querySelector('.fi-del').onclick = e => {
       e.stopPropagation();
@@ -1022,40 +1033,50 @@ function renderProfile(){
       saveProgress(p); renderProfile();
     };
     el.onclick = () => { vocabCat = el.dataset.cat; navigate('vocab'); };
+    el.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); vocabCat = el.dataset.cat; navigate('vocab'); } };
   });
 }
-let authMode = 'login';
 
 /* 练习历史记录 */
 function logPractice(ico, label, score){
-  const p = getProgress(); if(!p) return;
+  const p = getProgress();
+  p.lastStudyDate = todayKey();
   p.practices.unshift({ico, label, score, time: Date.now()});
   p.practices = p.practices.slice(0, 60);
   saveProgress(p);
 }
 
-/* ================= 每日提醒 ================= */
+/* ================= 打开网站时提醒 ================= */
 function maybeRemind(){
-  if(!currentUser) return;
-  const p = getProgress(); if(!p || !p.reminder) return;
+  const p = getProgress(); if(!p.reminder) return;
   const today = todayKey();
   if(p.reminderSentDate === today) return;
   if(p.goalDate === today && p.goalToday >= p.goalCount) return; /* 已达标 */
-  if(!('Notification' in window)) return;
-  if(Notification.permission !== 'granted') return;
-  const n = new Notification('粵學堂 · 每日提醒', {
-    body: `今日目标 ${p.goalToday}/${p.goalCount} 个词汇，仲差少少，快啲嚟学啦！`,
-    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="18" fill="%23C8102E"/><text x="50" y="68" font-size="52" text-anchor="middle" fill="%23FFF" font-family="serif" font-weight="700">粤</text></svg>'
-  });
-  n.onclick = () => { window.focus(); n.close(); };
+  setTimeout(() => toast(`今日已听 ${p.goalToday}/${p.goalCount} 个词汇，继续加油！`), 700);
   p.reminderSentDate = today;
   saveProgress(p);
 }
 
 /* ================= 全局事件 ================= */
+function showMobileMore(){
+  modalRoot.innerHTML = `<div class="modal-mask" id="moreMask"><div class="modal mobile-more" role="dialog" aria-modal="true" aria-labelledby="moreTitle">
+    <h3 id="moreTitle">更多学习内容 <button class="modal-x" id="moreClose" aria-label="关闭">✕</button></h3>
+    <div class="mobile-more-grid">
+      <button data-more-nav="sing"><span>🎵</span><b>学唱粤语歌</b><small>逐句听唱与跟读</small></button>
+      <button data-more-nav="grammar"><span>🧩</span><b>语法专栏</b><small>十讲掌握常用结构</small></button>
+      <button data-more-nav="culture"><span>🏮</span><b>文化趣知</b><small>俗语与港式生活</small></button>
+    </div>
+  </div></div>`;
+  $('#moreClose').onclick = () => { modalRoot.innerHTML = ''; };
+  $('#moreMask').onclick = e => { if(e.target.id === 'moreMask') modalRoot.innerHTML = ''; };
+  $$('[data-more-nav]', modalRoot).forEach(b => b.onclick = () => { const route = b.dataset.moreNav; modalRoot.innerHTML = ''; navigate(route); });
+  $('#moreClose').focus();
+}
 function bindGlobal(){
   /* 导航 */
   $$('[data-nav]').forEach(el => el.addEventListener('click', () => navigate(el.dataset.nav)));
+  window.addEventListener('popstate', () => navigate(routeFromLocation(), {fromHistory:true}));
+  const more = $('#mMore'); if(more) more.onclick = showMobileMore;
   $('#dlgBack').onclick = () => { curDlg = null; renderDialogues(); };
   /* 主题 */
   const setTheme = t => {
@@ -1142,21 +1163,21 @@ function annotateRuby(han, jp){
 
 function renderSing(){
   $('#songCards').innerHTML = SONGS.map((s,i) => `
-    <div class="song-card" data-sid="${s.id}" style="background:linear-gradient(135deg,${s.colors[0]},${s.colors[1]});animation:pageIn .4s ${i*0.08}s backwards">
+    <button class="song-card" data-sid="${s.id}" style="background:linear-gradient(135deg,${s.colors[0]},${s.colors[1]});animation:pageIn .4s ${i*0.08}s backwards">
       <span class="sc-emoji">${s.emoji}</span>
       <span class="sc-dots"><i></i><i></i><i></i></span>
       <h3>${s.title}</h3>
       <div class="sc-meta">${s.artist} · ${s.year} · ${s.lyric.length} 句</div>
       <div class="sc-tags">${s.tags.map(t=>`<span class="sc-tag">${t}</span>`).join('')}<span class="sc-tag">${s.level}</span></div>
-    </div>`).join('');
+    </button>`).join('');
   $$('#songCards .song-card').forEach(c => c.onclick = () => openSong(c.dataset.sid));
   /* 歌词字词小词典 */
   $('#swGrid').innerHTML = LYRIC_WORDS.map(w => `
-    <div class="sw-item" title="点击朗读">
+    <button class="sw-item" title="点击朗读" aria-label="播放 ${esc(w.char)}">
       <div class="sw-top"><span class="sw-char">${w.char}</span><span class="sw-jp">${w.jp}</span></div>
       <div class="sw-mand">${w.mand}</div>
       <div class="sw-ex">${w.ex}</div>
-    </div>`).join('');
+    </button>`).join('');
   $$('#swGrid .sw-item').forEach(el => el.onclick = () => speak(el.querySelector('.sw-char').textContent, {}));
   $('#singStage').classList.add('hidden');
 }
@@ -1181,7 +1202,7 @@ function renderSong(){
     </div>`;
   $('#singHead').style.background = 'linear-gradient(135deg,' + s.colors[0] + ',' + s.colors[1] + ')';
   $('#lyricPanel').innerHTML = s.lyric.map((l,i) => `
-    <div class="lyric-line ${i===sgIdx?'current':''}" data-i="${i}">
+    <div class="lyric-line ${i===sgIdx?'current':''}" data-i="${i}" role="group" tabindex="0" aria-label="第 ${i+1} 句，${esc(l.han)}">
       <span class="ll-no">${i+1}</span>
       <div class="ll-body">
         <div class="ll-han">${annotateRuby(l.han, l.jp)}</div>
@@ -1199,6 +1220,7 @@ function renderSong(){
   $$('#lyricPanel .lyric-line').forEach(el => {
     const i = +el.dataset.i;
     el.onclick = () => gotoLine(i, true);
+    el.onkeydown = e => { if((e.key === 'Enter' || e.key === ' ') && e.target === el){ e.preventDefault(); gotoLine(i, true); } };
     const demo = el.querySelector('[data-act=demo]');
     if(demo) demo.onclick = e => { e.stopPropagation(); gotoLine(i, true); };
     const rec = el.querySelector('[data-act=rec]');
@@ -1248,7 +1270,7 @@ async function singRec(i, btn){
       const ana = await analyzeBlob(blob);
       const l = curSong.lyric[i];
       const res = evalRecord({text:l.han}, ana);
-      modalRoot.innerHTML = `<div class="modal-mask"><div class="modal"><h3>🎤 跟唱评估 <span class="chip chip-green" style="margin-left:auto">${curSong.title} · 第 ${i+1} 句</span></h3><div id="ptFeedback"></div><div style="text-align:center;margin-top:16px"><button class="btn btn-ghost sm" id="evalClose">关闭</button></div></div></div>`;
+      modalRoot.innerHTML = `<div class="modal-mask"><div class="modal" role="dialog" aria-modal="true" aria-label="跟唱练习反馈"><h3>🎤 跟唱练习反馈 <span class="chip chip-green" style="margin-left:auto">${curSong.title} · 第 ${i+1} 句</span></h3><div id="ptFeedback"></div><div style="text-align:center;margin-top:16px"><button class="btn btn-ghost sm" id="evalClose">关闭</button></div></div></div>`;
       renderFeedback(res, {text:l.han, jp:l.jp}, $('#ptFeedback'));
       $('#evalClose').onclick = () => { modalRoot.innerHTML = ''; };
       logPractice('🎵', curSong.title + ' 第' + (i+1) + '句', finalScore(res, null));
@@ -1370,6 +1392,7 @@ function bindSing(){
 
 /* ================= 启动 ================= */
 function init(){
+  migrateLegacyProgress();
   bindGlobal();
   bindSing();
   registerSW();
@@ -1378,7 +1401,7 @@ function init(){
     const today = todayKey();
     if(p.goalDate !== today){ p.goalDate = today; p.goalToday = 0; p.goalWords = []; saveProgress(p); }
   }
-  navigate('home');
+  navigate(routeFromLocation(), {replace:true});
   updateVoiceUI();
   maybeRemind();
   setTimeout(updateVoiceUI, 800);

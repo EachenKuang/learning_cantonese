@@ -36,7 +36,7 @@
       <button class="nav-item" data-nav="sing"><span class="nav-ico">🎵</span>学唱粤语歌<span class="nav-en">Sing</span></button>
       <button class="nav-item" data-nav="grammar"><span class="nav-ico">🧩</span>语法专栏<span class="nav-en">Grammar</span></button>
       <button class="nav-item" data-nav="culture"><span class="nav-ico">🏮</span>文化趣知<span class="nav-en">Culture</span></button>
-      <button class="nav-item" data-nav="profile"><span class="nav-ico">📊</span>学习进度<span class="nav-en">Progress</span></button>
+      <button class="nav-item" data-nav="profile"><span class="nav-ico">📊</span>学习档案<span class="nav-en">Progress</span></button>
     </nav>
     <div class="side-foot">
       <button class="theme-toggle" id="themeToggle" title="切换明暗主题">🌙 暗色模式</button>
@@ -72,6 +72,18 @@
         </div>
       </div>
 
+      <section class="starter-path" aria-labelledby="starterPathTitle">
+        <div class="starter-path-head">
+          <div><span>零基础建议路线</span><h2 id="starterPathTitle">先听准，再开口，最后放进场景</h2></div>
+          <p>第一次来可以按 1 → 2 → 3 学；其他模块随时自由探索。</p>
+        </div>
+        <div class="starter-steps">
+          <button data-nav="phonetics"><i>1</i><b>听声母和声调</b><small>先建立粤拼与声音的对应</small></button>
+          <button data-nav="vocab"><i>2</i><b>学 5 个场景词</b><small>听示范、看例句、做小测</small></button>
+          <button data-nav="dialogues"><i>3</i><b>完成一段对话</b><small>逐句跟读，再试角色扮演</small></button>
+        </div>
+      </section>
+
       <div class="home-grid">
         <div class="card goal-card">
           <div class="card-head"><h3>🎯 今日目标</h3><span class="chip" id="goalChip">未设定</span></div>
@@ -82,7 +94,7 @@
             </svg>
             <div class="goal-ring-txt"><b id="goalNum">0</b><span>个词汇</span></div>
           </div>
-          <p class="goal-line" id="goalLine">设定每日目标，坚持每天进步一点点。</p>
+          <p class="goal-line" id="goalLine">学习记录会自动保存在当前设备。</p>
           <button class="btn btn-soft sm" data-nav="profile">设定目标 →</button>
         </div>
 
@@ -107,7 +119,7 @@
       <div class="page-head">
         <div>
           <h2>语音学习系统 <span class="jp-tag">Jyutping</span></h2>
-          <p class="page-desc">粤语拼音（粤拼）由 19 个声母、56 个韵母和 6 个声调组成。点击卡片听标准发音，用麦克风跟读对比。</p>
+          <p class="page-desc">粤拼包含 19 个声母、56 个韵母和 6 个基本声调；入声沿用其中 3 个调值，因此常写作「6+3」。点击卡片听示范，再用麦克风录音对比。</p>
         </div>
         <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;min-width:min(420px,100%)">
           <div class="voice-badge" id="voiceBadge"><span class="dot"></span><span id="voiceBadgeTxt">检测粤语语音…</span></div>
@@ -163,7 +175,7 @@
           </div>
           <div class="practice-feedback" id="ptFeedback"></div>
         </div>
-        <p class="tip">💡 录音评估基于<strong>时长匹配</strong>与<strong>音量强度</strong>给出参考分数，并支持 A/B 对比。若设备无粤语语音，将回退到普通话语音作近似示范。</p>
+        <p class="tip">💡 练习反馈只比较<strong>录音时长</strong>与<strong>音量强度</strong>，不识别发音是否准确；请结合 A/B 回放自查声调。云端不可用时只回退到设备粤语语音，不会用普通话代替。</p>
       </div>
     </section>
 
@@ -297,12 +309,12 @@
       <div class="culture-grid" id="cultureGrid"></div>
     </section>
 
-    <!-- ===== 我的 / 进度 ===== -->
+    <!-- ===== 本机学习档案 ===== -->
     <section class="page" id="page-profile">
       <div class="page-head">
         <div>
-          <h2>学习进度追踪 <span class="jp-tag">Progress</span></h2>
-          <p class="page-desc">注册账号（本地存储）记录学习旅程：进度、收藏、历史、目标与提醒。</p>
+          <h2>本机学习档案 <span class="jp-tag">Progress</span></h2>
+          <p class="page-desc">无需注册，进度、收藏、目标与练习历史会自动保存在当前设备，并可导出备份。</p>
         </div>
       </div>
       <div id="profileBody"></div>
@@ -314,9 +326,9 @@
     <button class="m-nav-item active" data-nav="home"><span>🏠</span>首页</button>
     <button class="m-nav-item" data-nav="phonetics"><span>🎙️</span>语音</button>
     <button class="m-nav-item" data-nav="vocab"><span>📖</span>词汇</button>
-    <button class="m-nav-item" data-nav="sing"><span>🎵</span>唱歌</button>
     <button class="m-nav-item" data-nav="dialogues"><span>💬</span>对话</button>
-    <button class="m-nav-item" data-nav="profile"><span>📊</span>进度</button>
+    <button class="m-nav-item" data-nav="profile"><span>📊</span>档案</button>
+    <button class="m-nav-item" id="mMore"><span>•••</span>更多</button>
   </nav>
 </div>
 
