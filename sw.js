@@ -3,13 +3,14 @@
    - 页面导航（navigate）：network-first，保证用户打开即最新版
    - 静态资源：stale-while-revalidate，先用缓存（快）后台刷新缓存
    - 发布新内容时：把 CACHE 版本号 +1（如 canto-shell-v2），activate 自动清旧缓存 */
-const CACHE = 'canto-shell-v8';
+const CACHE = 'canto-shell-v9';
 const CORE = [
   './',
   './index.html',
   './manifest.webmanifest',
   './css/style.css',
   './js/data.js',
+  './js/songs.js',
   './js/app.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -31,7 +32,9 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  /* 跨域（Google Fonts）走网络，失败不报错 */
+  /* 语音 API 由 HTTP 缓存和服务端磁盘缓存管理，不写入 PWA 静态缓存。 */
+  if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) return;
+  /* 跨域资源走网络，失败不报错。 */
   if (url.origin !== self.location.origin) {
     e.respondWith(fetch(req).catch(() => new Response('', { status: 504 })));
     return;

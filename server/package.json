@@ -1,14 +1,17 @@
 {
-  "name": "server",
+  "name": "jyut-cantonese-tts",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Same-origin Cantonese neural TTS service for 粵學堂",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node tts-proxy.mjs",
+    "check": "node --check tts-proxy.mjs"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "msedge-tts": "^2.0.7"
   }

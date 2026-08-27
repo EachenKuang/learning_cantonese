@@ -1,0 +1,36 @@
+[Unit]
+Description=Jyut Cantonese neural TTS proxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jyut-tts
+Group=jyut-tts
+WorkingDirectory=/opt/jyut-tts-live
+Environment=HOST=127.0.0.1
+Environment=PORT=8787
+Environment=CACHE_DIR=/var/cache/jyut-tts
+Environment=ALLOWED_ORIGIN=https://jyut.kuangyichen.com
+Environment=MAX_TEXT_LENGTH=160
+Environment=MAX_CONCURRENT=2
+ExecStart=/usr/local/bin/node /opt/jyut-tts-live/tts-proxy.mjs
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+UMask=0027
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths=/var/cache/jyut-tts
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=512M
+TasksMax=128
+
+[Install]
+WantedBy=multi-user.target

@@ -58,24 +58,40 @@ function saveProgress(p){ if(currentUser) LS.set(progressKey(currentUser), p); }
 let speechRate = LS.get('canto_speech_rate', 0.75);
 
 /* ================= 语音（TTS）================= */
+const CLOUD_TTS_URL = '/api/tts';
+const CLOUD_TTS_HEALTH_URL = '/api/tts/health';
+const cloudAudio = new Audio();
+let localYueVoice = null;
+let cloudTTS = {checked:false, ready:false, name:'晓佳（zh-HK-HiuGaaiNeural）'};
 let voiceInfo = {status:'detecting', name:''};
+
 function refreshVoices(){
-  if(!('speechSynthesis' in window)){ voiceInfo = {status:'error', name:'浏览器不支持语音合成'}; updateVoiceUI(); return; }
+  if(!('speechSynthesis' in window)){ localYueVoice = null; updateVoiceState(); return; }
   const vs = speechSynthesis.getVoices();
   const nameKey = v => ((v.name || '') + ' ' + (v.lang || '')).toLowerCase();
-  /* 粤语语音优先级：
-     1) lang 精确匹配 zh-HK / zh-MO / yue
-     2) lang 或名称含 香港 / 粤 / cantonese / hong kong
-     3) 其余任何中文语音兜底（可能是普通话，需提示）
-     注意：zh-TW（台湾）是国语/普通话，绝不能当粤语用 */
-  let yue =
+  /* 只接受明确的粤语语音；普通话不再作为教学发音兜底。 */
+  localYueVoice =
     vs.find(v => /^(zh[-_]?hk|zh[-_]?mo|yue)/i.test(v.lang || '')) ||
     vs.find(v => /(zh[-_]?hk|zh[-_]?mo|yue)/i.test(nameKey(v))) ||
-    vs.find(v => /粤|cantonese|hong.?kong|香港/i.test(nameKey(v)));
-  const anyZh = vs.find(v => v.lang && v.lang.toLowerCase().startsWith('zh'));
-  if(yue) voiceInfo = {status:'ok', name:yue.name + '（' + yue.lang + '）', voice:yue};
-  else if(anyZh) voiceInfo = {status:'warn', name:anyZh.name + '（' + anyZh.lang + '）', voice:anyZh};
-  else voiceInfo = {status:'error', name:'未找到中文语音'};
+    vs.find(v => /粤|cantonese|hong.?kong|香港/i.test(nameKey(v))) || null;
+  updateVoiceState();
+}
+async function checkCloudTTS(){
+  try{
+    const res = await fetch(CLOUD_TTS_HEALTH_URL, {cache:'no-store', headers:{Accept:'application/json'}});
+    if(!res.ok) throw new Error('health ' + res.status);
+    const data = await res.json();
+    cloudTTS = {checked:true, ready:data.status === 'ok', name:data.voiceLabel || cloudTTS.name};
+  }catch(_){
+    cloudTTS = {...cloudTTS, checked:true, ready:false};
+  }
+  updateVoiceState();
+}
+function updateVoiceState(){
+  if(cloudTTS.ready) voiceInfo = {status:'cloud', name:cloudTTS.name};
+  else if(localYueVoice) voiceInfo = {status:'ok', name:localYueVoice.name + '（' + localYueVoice.lang + '）', voice:localYueVoice};
+  else if(!cloudTTS.checked) voiceInfo = {status:'detecting', name:''};
+  else voiceInfo = {status:'error', name:'云端与设备均未找到可用粤语语音'};
   renderVoiceDiag();
   updateVoiceUI();
 }
@@ -83,16 +99,17 @@ if('speechSynthesis' in window){
   refreshVoices();
   speechSynthesis.onvoiceschanged = refreshVoices;
 }
+checkCloudTTS();
 function updateVoiceUI(){
   let txt;
-  if(voiceInfo.status === 'ok') txt = '粤语语音：' + voiceInfo.name;
-  else if(voiceInfo.status === 'warn') txt = '⚠ 未检测到粤语语音，当前用 ' + voiceInfo.name + '（普通话）朗读，点「语音诊断」看如何设置';
-  else if(voiceInfo.status === 'error') txt = '未找到语音，发音示范不可用，点「语音诊断」';
+  if(voiceInfo.status === 'cloud') txt = '云端粤语：' + voiceInfo.name;
+  else if(voiceInfo.status === 'ok') txt = '设备粤语：' + voiceInfo.name + '（离线兜底）';
+  else if(voiceInfo.status === 'error') txt = '粤语语音暂不可用，点「语音诊断」';
   else txt = '检测粤语语音…';
   const el = $('#voiceBadgeTxt'), badge = $('#voiceBadge');
   if(el) el.textContent = txt;
   if(badge){
-    badge.className = 'voice-badge' + (voiceInfo.status==='ok'?' ok':voiceInfo.status==='warn'?' warn':'');
+    badge.className = 'voice-badge' + (voiceInfo.status==='ok'||voiceInfo.status==='cloud'?' ok':voiceInfo.status==='error'?' warn':'');
   }
   const side = $('#sideVoiceStatus');
   if(side) side.textContent = '🔊 ' + txt;
@@ -101,19 +118,23 @@ function updateVoiceUI(){
 function renderVoiceDiag(){
   const box = $('#voiceDiagList');
   if(!box) return;
-  if(!('speechSynthesis' in window)){ box.innerHTML = '<p class="diag-line">当前浏览器不支持语音合成（Web Speech API）。</p>'; return; }
+  const cloudLine = `<div class="diag-line ${cloudTTS.ready?'diag-yue':''}">
+    <span class="diag-dot ${cloudTTS.ready?'diag-cur':''}"></span>
+    ☁️ 云端粤语 · ${esc(cloudTTS.name)} · ${cloudTTS.ready?'当前可用':'暂不可用'}
+  </div>`;
+  if(!('speechSynthesis' in window)){ box.innerHTML = cloudLine + '<p class="diag-line">当前浏览器不支持设备语音，仍可使用云端粤语。</p>'; return; }
   const vs = speechSynthesis.getVoices();
   const zh = vs.filter(v => /zh|yue/i.test((v.lang||'') + ' ' + (v.name||'')));
   if(!zh.length){
-    box.innerHTML = '<p class="diag-line">⚠ 设备上没有任何中文语音，请先安装语音包（见下方指引）。</p>';
+    box.innerHTML = cloudLine + '<p class="diag-line">设备上没有本地粤语语音；联网时使用云端粤语。</p>';
     return;
   }
-  box.innerHTML = zh.map(v => {
+  box.innerHTML = cloudLine + zh.map(v => {
     const isYue = /^(zh[-_]?hk|zh[-_]?mo|yue)/i.test(v.lang||'') || /粤|cantonese|hong.?kong|香港/i.test((v.name||'')+' '+(v.lang||''));
-    const isCur = voiceInfo.voice === v;
+    const isCur = !cloudTTS.ready && localYueVoice === v;
     return `<div class="diag-line ${isYue?'diag-yue':''}">
       <span class="diag-dot ${isCur?'diag-cur':''}"></span>
-      ${isYue?'🇭🇰 粤语':'🗣 非粤语'} · ${v.name} · <code>${v.lang}</code>${isCur?' ← 当前使用':''}
+      ${isYue?'🇭🇰 设备粤语':'🗣 非粤语（不用于教学）'} · ${v.name} · <code>${v.lang}</code>${isCur?' ← 离线兜底':''}
     </div>`;
   }).join('');
 }
@@ -122,27 +143,70 @@ function cleanForSpeech(t){
   return String(t).replace(/[（(].*?[)）]/g,'').replace(/[^\u4e00-\u9fff\u3400-\u4dbf\uF900-\uFAFF]/g,'');
 }
 let currentUtterance = null;
+let cloudQueue = [], cloudPlaying = false, cloudGeneration = 0;
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-function speak(text, opts={}){
-  if(!('speechSynthesis' in window)) return;
+function speakLocal(text, opts={}){
+  if(!('speechSynthesis' in window) || !localYueVoice) return false;
   if(!opts.queue) speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(cleanForSpeech(text));
-  if(voiceInfo.voice){
-    u.voice = voiceInfo.voice;
-    u.lang = voiceInfo.voice.lang;
-  } else {
-    u.lang = 'zh-HK';
-  }
+  u.voice = localYueVoice;
+  u.lang = localYueVoice.lang || 'zh-HK';
   if(isIOS){
-    /* iOS 会忽略 voice 只认 lang，强制 zh-HK（需系统已下载粤语语音包） */
     u.lang = 'zh-HK';
   }
   u.rate = opts.rate ?? speechRate;
   u.pitch = opts.pitch ?? 1.0;
   currentUtterance = u;
   speechSynthesis.speak(u);
+  return true;
 }
-function stopSpeak(){ if('speechSynthesis' in window) speechSynthesis.cancel(); }
+function playNextCloud(){
+  if(cloudPlaying || !cloudQueue.length) return;
+  const item = cloudQueue.shift();
+  const generation = cloudGeneration;
+  cloudPlaying = true;
+  const url = new URL(CLOUD_TTS_URL, window.location.origin);
+  url.searchParams.set('text', cleanForSpeech(item.text));
+  url.searchParams.set('rate', String(item.opts.rate ?? speechRate));
+  cloudAudio.src = url.toString();
+  let settled = false;
+  const finish = () => {
+    if(settled || generation !== cloudGeneration) return;
+    settled = true;
+    cloudPlaying = false;
+    playNextCloud();
+  };
+  const fallback = () => {
+    if(settled || generation !== cloudGeneration) return;
+    settled = true;
+    cloudPlaying = false;
+    if(!speakLocal(item.text, item.opts)) toast('粤语语音暂不可用，请稍后重试');
+    playNextCloud();
+  };
+  cloudAudio.onended = finish;
+  cloudAudio.onerror = fallback;
+  cloudAudio.play().catch(fallback);
+}
+function speak(text, opts={}){
+  const cleaned = cleanForSpeech(text);
+  if(!cleaned) return;
+  if(cloudTTS.ready){
+    if(!opts.queue) stopSpeak();
+    cloudQueue.push({text:cleaned, opts});
+    playNextCloud();
+    return;
+  }
+  if(!speakLocal(cleaned, opts)) toast('粤语语音暂不可用，请检查网络或安装设备粤语语音包');
+}
+function stopSpeak(){
+  cloudGeneration++;
+  cloudQueue = [];
+  cloudPlaying = false;
+  cloudAudio.pause();
+  cloudAudio.removeAttribute('src');
+  cloudAudio.load();
+  if('speechSynthesis' in window) speechSynthesis.cancel();
+}
 
 /* ================= 录音与发音评估 ================= */
 let mediaRecorder = null, chunks = [], recordedBlob = null, recording = false, recordedUrl = null;

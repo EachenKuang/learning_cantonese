@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>粤学堂 · 学粤语</title>
 <meta name="description" content="从零到进阶的粤语学习网站：粤拼音标、场景词汇、对话练习、语法专栏、进度追踪与文化趣知。">
+<link rel="canonical" href="https://jyut.kuangyichen.com/">
 <link rel="icon" href="icons/favicon-64.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
 <link rel="manifest" href="manifest.webmanifest">
@@ -13,9 +14,6 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="粵學堂">
 <meta name="mobile-web-app-capable" content="yes">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -114,14 +112,15 @@
         <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;min-width:min(420px,100%)">
           <div class="voice-badge" id="voiceBadge"><span class="dot"></span><span id="voiceBadgeTxt">检测粤语语音…</span></div>
           <details class="voice-diag">
-            <summary>🔧 语音诊断 · 朗读不是粤语？点这里</summary>
+            <summary>🔧 语音诊断 · 云端与设备状态</summary>
             <div id="voiceDiagList" class="diag-list"></div>
             <div class="diag-tip">
-              <b>手机朗读出来是普通话，怎么设置成粤语？</b><br>
-              · <b>iPhone / iPad：</b>设置 → 辅助功能 → 朗读内容 → 声音 → 粤语 → 下载「粤语（香港）」语音包，下载完成后刷新本页<br>
-              · <b>Android：</b>系统设置 → 无障碍 → 文字转语音（TTS）→ Google 语音服务 → 安装「粤语（香港）」语音<br>
-              · <b>Edge / Chrome 桌面：</b>一般自带粤语，无需设置；若仍读普通话，可在设置 → 语言中把「中文（香港）」加入并刷新<br>
-              · 语音包装好后，本页会自动切换到粤语朗读（无需重启浏览器）
+              <b>粵學堂默认使用什么声音？</b><br>
+              · 联网时优先使用服务器提供的「晓佳」粤语神经音色，保证不同设备上的示范音一致<br>
+              · 云端暂不可用时，只回退到设备上的粤语语音；不会用普通话冒充粤语教学音<br>
+              · <b>iPhone / iPad：</b>设置 → 辅助功能 → 朗读内容 → 声音 → 粤语，可下载离线语音包<br>
+              · <b>Android：</b>系统设置 → 无障碍 → 文字转语音（TTS）→ 安装「粤语（香港）」语音，可作为离线兜底<br>
+              · 朗读文字会发送到本站语音服务生成音频；录音练习和学习进度仍只保存在当前设备
             </div>
           </details>
         </div>

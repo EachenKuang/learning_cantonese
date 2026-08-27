@@ -1,6 +1,6 @@
 # 粤学堂 · 云端粤语 TTS 代理（自建服务器版）
 
-把微软 Edge TTS（免费、免 key、粤语神经网络音质）封装成 HTTP 接口。
+把 Microsoft Edge Read Aloud 的粤语神经音色封装成本站同源 HTTP 接口。
 **网站前端在没有本地粤语语音包的设备（尤其是安卓）上，可调用本服务合成粤语朗读。**
 
 ## 部署（任选一种）
@@ -36,7 +36,7 @@ CMD ["node", "tts-proxy.mjs"]
 ## 接口
 
 ```
-GET /tts?text=原諒我這一生不羈放縱愛自由&voice=hiuGaai&rate=0.75
+GET /api/tts?text=原諒我這一生不羈放縱愛自由&voice=hiuGaai&rate=0.75
 ```
 
 | 参数 | 说明 | 默认 |
@@ -45,13 +45,13 @@ GET /tts?text=原諒我這一生不羈放縱愛自由&voice=hiuGaai&rate=0.75
 | `voice` | `hiuGaai`(女) / `hiuMaan`(女) / `wanLung`(男) | hiuGaai |
 | `rate` | `0.5 / 0.75 / 1 / 1.25 / 1.5 / 2`（与网站朗读语速档位一致） | 0.75 |
 
-返回：`audio/mpeg`（MP3 流），已带 CORS 头，任意网页可直接调用。
+返回：`audio/mpeg`（MP3）；服务默认只接受本站同源请求，并限制文本长度和并发。
 
 ## 特性
 
 - **磁盘缓存**：同一句话只合成一次，之后秒回（`tts-cache/` 目录，可定期清理）
 - **合成失败保护**：不产生空缓存文件
-- **免费无限量**：微软 Edge 朗读服务无 key、无配额限制（非官方接口，介意可用 Azure 官方替换）
+- **无需 API Key**：当前使用 Edge Read Aloud 接口；它没有可承诺的 SLA，服务异常时前端回退到设备粤语语音
 
 ## 前端接入（下一步）
 
@@ -60,4 +60,4 @@ GET /tts?text=原諒我這一生不羈放縱愛自由&voice=hiuGaai&rate=0.75
 ## 注意
 
 - Edge TTS 是非官方接口，微软可能调整；若追求长期稳定，可平滑替换为 Azure 认知服务（代码结构不变，只换合成引擎）。
-- 请给代理加上访问控制（如 nginx IP 白名单或简单 token），避免被他人白嫖合成服务。
+- 生产环境应只监听 `127.0.0.1`，由 Nginx 暴露 `/api/tts` 并配置限流。

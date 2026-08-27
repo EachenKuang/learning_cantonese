@@ -3,7 +3,7 @@
 从零到进阶的粤语学习网站：粤拼音标、场景词汇、对话实战、学唱粤语歌、语法专栏、文化趣知、进度追踪。
 **識聽識講，港味十足。**
 
-> 在线体验：https://8ebeb2eab42748df95b6c0d1a7df308c.app.workbuddy.link
+> 在线体验：https://jyut.kuangyichen.com
 > （纯前端静态站，手机扫码即可使用；支持安装为 PWA 应用）
 
 ---
@@ -50,7 +50,7 @@ CloudStudio 静态托管（HTTPS · PWA · Service Worker 缓存）
               │  /tts?text=…&voice=…&rate=…
               ▼
       你的服务器 · tts-proxy（Node 单文件）
-       ├── 引擎层：Edge TTS（免注册，默认）/ MiMo TTS（官方粤语音色）
+       ├── 引擎层：Microsoft Edge Read Aloud（晓佳粤语神经音色）
        ├── 磁盘缓存 tts-cache：同一句只合成一次（命中 0.002s）
        └── API Key 只存服务器
               │  返回 mp3
