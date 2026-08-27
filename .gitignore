@@ -1,0 +1,14 @@
+# 粤学堂 · 项目 gitignore
+
+# WorkBuddy 工具私有数据（学习记忆等，不进仓库）
+.workbuddy/
+
+# Node 依赖与运行时缓存
+node_modules/
+tts-cache/
+
+# macOS
+.DS_Store
+
+# 日志
+*.log

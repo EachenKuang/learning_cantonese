@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>粤学堂 · 学粤语</title>
+<meta name="description" content="从零到进阶的粤语学习网站：粤拼音标、场景词汇、对话练习、语法专栏、进度追踪与文化趣知。">
+<link rel="icon" href="icons/favicon-64.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#c8102e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="粵學堂">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ======== 侧边导航（桌面） ======== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-seal">粤</div>
+      <div class="brand-text">
+        <div class="brand-name">粵學堂</div>
+        <div class="brand-sub">CANTONESE LAB</div>
+      </div>
+    </div>
+    <nav class="side-nav">
+      <button class="nav-item active" data-nav="home"><span class="nav-ico">🏠</span>首页<span class="nav-en">Home</span></button>
+      <button class="nav-item" data-nav="phonetics"><span class="nav-ico">🎙️</span>语音学习<span class="nav-en">Phonics</span></button>
+      <button class="nav-item" data-nav="vocab"><span class="nav-ico">📖</span>场景词汇<span class="nav-en">Words</span></button>
+      <button class="nav-item" data-nav="dialogues"><span class="nav-ico">💬</span>对话实战<span class="nav-en">Dialogues</span></button>
+      <button class="nav-item" data-nav="sing"><span class="nav-ico">🎵</span>学唱粤语歌<span class="nav-en">Sing</span></button>
+      <button class="nav-item" data-nav="grammar"><span class="nav-ico">🧩</span>语法专栏<span class="nav-en">Grammar</span></button>
+      <button class="nav-item" data-nav="culture"><span class="nav-ico">🏮</span>文化趣知<span class="nav-en">Culture</span></button>
+      <button class="nav-item" data-nav="profile"><span class="nav-ico">📊</span>学习进度<span class="nav-en">Progress</span></button>
+    </nav>
+    <div class="side-foot">
+      <button class="theme-toggle" id="themeToggle" title="切换明暗主题">🌙 暗色模式</button>
+      <div class="side-voice" id="sideVoiceStatus">🔊 粤语语音：检测中…</div>
+    </div>
+  </aside>
+
+  <!-- ======== 移动端顶栏 ======== -->
+  <header class="m-topbar">
+    <div class="m-brand"><span class="brand-seal sm">粤</span><b>粵學堂</b></div>
+    <button class="m-theme" id="mThemeToggle">🌙</button>
+  </header>
+
+  <!-- ======== 主内容区 ======== -->
+  <main class="main" id="main">
+
+    <!-- ===== 首页 ===== -->
+    <section class="page active" id="page-home">
+      <div class="hero">
+        <div class="hero-stamp">粤</div>
+        <p class="hero-eyebrow">LEARN CANTONESE · 由零開始</p>
+        <h1 class="hero-title">識聽識講，<em>港味十足</em></h1>
+        <p class="hero-sub">从粤拼声调到街市砍价，一套覆盖零基础到进阶的粤语学习工坊。<br>「講多啲，聽多啲，笑多啲。」</p>
+        <div class="hero-actions">
+          <button class="btn btn-primary" data-nav="phonetics">🎙️ 从发音开始</button>
+          <button class="btn btn-ghost" data-nav="vocab">📖 学场景词汇</button>
+        </div>
+        <div class="hero-stats">
+          <div><b id="statWords">0</b><span>词汇收录</span></div>
+          <div><b id="statDialogues">0</b><span>对话场景</span></div>
+          <div><b id="statArticles">0</b><span>语法专题</span></div>
+          <div><b id="statCulture">0</b><span>文化趣闻</span></div>
+        </div>
+      </div>
+
+      <div class="home-grid">
+        <div class="card goal-card">
+          <div class="card-head"><h3>🎯 今日目标</h3><span class="chip" id="goalChip">未设定</span></div>
+          <div class="goal-ring-wrap">
+            <svg class="goal-ring" viewBox="0 0 120 120">
+              <circle class="ring-bg" cx="60" cy="60" r="52"/>
+              <circle class="ring-fg" id="goalRing" cx="60" cy="60" r="52"/>
+            </svg>
+            <div class="goal-ring-txt"><b id="goalNum">0</b><span>个词汇</span></div>
+          </div>
+          <p class="goal-line" id="goalLine">设定每日目标，坚持每天进步一点点。</p>
+          <button class="btn btn-soft sm" data-nav="profile">设定目标 →</button>
+        </div>
+
+        <div class="card streak-card">
+          <div class="card-head"><h3>🔥 连续打卡</h3><span class="chip chip-red" id="streakChip">0 天</span></div>
+          <div class="streak-week" id="streakWeek"></div>
+          <p class="goal-line">坚持就是胜利，<b>打風都唔使惊</b> ⛈️</p>
+          <button class="btn btn-soft sm" id="checkinBtn">✍️ 今日打卡</button>
+        </div>
+
+        <div class="card continue-card">
+          <div class="card-head"><h3>⏳ 继续学习</h3></div>
+          <div class="continue-list" id="continueList"></div>
+        </div>
+      </div>
+
+      <div class="module-grid" id="moduleGrid"></div>
+    </section>
+
+    <!-- ===== 语音系统 ===== -->
+    <section class="page" id="page-phonetics">
+      <div class="page-head">
+        <div>
+          <h2>语音学习系统 <span class="jp-tag">Jyutping</span></h2>
+          <p class="page-desc">粤语拼音（粤拼）由 19 个声母、56 个韵母和 6 个声调组成。点击卡片听标准发音，用麦克风跟读对比。</p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;min-width:min(420px,100%)">
+          <div class="voice-badge" id="voiceBadge"><span class="dot"></span><span id="voiceBadgeTxt">检测粤语语音…</span></div>
+          <details class="voice-diag">
+            <summary>🔧 语音诊断 · 朗读不是粤语？点这里</summary>
+            <div id="voiceDiagList" class="diag-list"></div>
+            <div class="diag-tip">
+              <b>手机朗读出来是普通话，怎么设置成粤语？</b><br>
+              · <b>iPhone / iPad：</b>设置 → 辅助功能 → 朗读内容 → 声音 → 粤语 → 下载「粤语（香港）」语音包，下载完成后刷新本页<br>
+              · <b>Android：</b>系统设置 → 无障碍 → 文字转语音（TTS）→ Google 语音服务 → 安装「粤语（香港）」语音<br>
+              · <b>Edge / Chrome 桌面：</b>一般自带粤语，无需设置；若仍读普通话，可在设置 → 语言中把「中文（香港）」加入并刷新<br>
+              · 语音包装好后，本页会自动切换到粤语朗读（无需重启浏览器）
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <div class="ph-tabs">
+        <button class="ph-tab active" data-phtab="initials">声母 <span>19</span></button>
+        <button class="ph-tab" data-phtab="finals">韵母 <span>56</span></button>
+        <button class="ph-tab" data-phtab="tones">声调 <span>6+3</span></button>
+      </div>
+      <div class="ph-toolbar">
+        <input class="search" id="phSearch" placeholder="搜索音标或例字，如 aa / 山 / si…">
+        <div class="ph-tools">
+          <button class="btn btn-ghost sm" id="phPlayAll">▶ 全部朗读</button>
+          <button class="btn btn-ghost sm" id="phStopAll">⏹ 停止</button>
+          <span class="rate-label">语速</span>
+          <div class="rate-group" id="phRate">
+            <button data-r="0.5">0.5×</button>
+            <button data-r="0.75">0.75×</button>
+            <button data-r="1">1×</button>
+            <button data-r="1.25">1.25×</button>
+            <button data-r="1.5">1.5×</button>
+            <button data-r="2">2×</button>
+          </div>
+        </div>
+      </div>
+      <div class="ph-grid" id="phGrid"></div>
+
+      <div class="card practice-card" id="practiceCard">
+        <div class="card-head"><h3>🎤 发音练习台</h3><span class="chip chip-green" id="practiceStatus">选择卡片开始</span></div>
+        <div class="practice-main">
+          <div class="practice-target" id="practiceTarget">
+            <div class="pt-symbol">—</div>
+            <div class="pt-word">点击左侧卡片选择要练习的发音</div>
+          </div>
+          <div class="practice-controls">
+            <button class="btn btn-primary" id="ptDemo">🔊 听标准音</button>
+            <button class="btn btn-red" id="ptRecord">● 开始录音</button>
+            <button class="btn btn-ghost" id="ptPlayback" disabled>▶ 播放我的录音</button>
+          </div>
+          <div class="practice-feedback" id="ptFeedback"></div>
+        </div>
+        <p class="tip">💡 录音评估基于<strong>时长匹配</strong>与<strong>音量强度</strong>给出参考分数，并支持 A/B 对比。若设备无粤语语音，将回退到普通话语音作近似示范。</p>
+      </div>
+    </section>
+
+    <!-- ===== 词汇 ===== -->
+    <section class="page" id="page-vocab">
+      <div class="page-head">
+        <div>
+          <h2>场景词汇学习 <span class="jp-tag">Vocabulary</span></h2>
+          <p class="page-desc">按日常场景分类学习，点击 ▶ 听发音，☆ 收藏生词。每个词都配粤语例句与普通话对照。</p>
+        </div>
+        <button class="btn btn-primary" id="quizOpenBtn">📝 听力小测</button>
+      </div>
+      <div class="cat-pills" id="catPills"></div>
+      <div class="ph-toolbar">
+        <input class="search" id="vocabSearch" placeholder="搜索粤语 / 粤拼 / 普通话，如 饮茶 / sik6…">
+        <div class="ph-tools">
+          <button class="btn btn-ghost sm" id="favFilter">☆ 只看收藏</button>
+          <button class="btn btn-ghost sm" id="favPlayAll">▶ 朗读本类全部</button>
+        </div>
+      </div>
+      <div class="vocab-grid" id="vocabGrid"></div>
+    </section>
+
+    <!-- ===== 对话 ===== -->
+    <section class="page" id="page-dialogues">
+      <div class="page-head">
+        <div>
+          <h2>对话场景模拟 <span class="jp-tag">Dialogues</span></h2>
+          <p class="page-desc">茶楼点餐、街市买菜、搭巴士……进入场景逐句跟读，或开启角色扮演模式化身其中一位。</p>
+        </div>
+      </div>
+      <div class="dlg-cards" id="dlgCards"></div>
+      <div class="dlg-detail hidden" id="dlgDetail">
+        <button class="btn btn-ghost sm" id="dlgBack">← 返回场景列表</button>
+        <div class="dlg-stage" id="dlgStage"></div>
+      </div>
+    </section>
+
+    <!-- ===== 唱粤语歌 ===== -->
+    <section class="page" id="page-sing">
+      <div class="page-head">
+        <div>
+          <h2>学唱粤语歌 <span class="jp-tag">Sing Along</span></h2>
+          <p class="page-desc">唱熟一首歌，胜过背十课单词。逐句跟唱经典粤语歌：先听示范，再开口唱，用录音对比练咬字。歌词仅供学习，版权归原作者所有。</p>
+        </div>
+      </div>
+
+      <div class="song-cards" id="songCards"></div>
+
+      <div class="sing-stage hidden" id="singStage">
+        <button class="btn btn-ghost sm" id="singBack">← 返回歌单</button>
+        <div class="sing-head" id="singHead"></div>
+
+        <div class="card sing-player">
+          <div class="sp-row">
+            <span class="sp-title">🎧 整曲播放</span>
+            <button class="btn btn-ghost sm" id="spImport">⬆️ 导入音频（MP3）</button>
+            <input type="file" id="spFile" accept="audio/*" hidden>
+          </div>
+          <div class="sp-ctrl">
+            <button class="sp-btn" id="spPlay">▶ 播放</button>
+            <input type="range" id="spSeek" min="0" max="100" value="0" title="进度">
+            <span class="sp-time" id="spTime">00:00 / 00:00</span>
+            <select class="sp-rate" id="spRate" title="语速">
+              <option value="0.75">0.75×</option>
+              <option value="0.9">0.9×</option>
+              <option value="1" selected>1.0×</option>
+              <option value="1.1">1.1×</option>
+            </select>
+          </div>
+          <p class="tip">💡 导入你本地的歌曲文件即可整曲播放（音频只在本机播放、绝不上传）。不导入也不影响：直接用下方的「跟唱练习」，AI 会逐句示范。</p>
+        </div>
+
+        <div class="sing-toolbar">
+          <button class="ph-tab" id="sgPrev">⏮ 上一句</button>
+          <button class="ph-tab" id="sgDemo">🔊 示范本句</button>
+          <button class="ph-tab" id="sgRec">🎤 录音跟唱</button>
+          <button class="ph-tab" id="sgNext">下一句 ⏭</button>
+          <button class="ph-tab" id="sgLoop">🔁 循环本句</button>
+          <button class="ph-tab" id="sgAuto">⚡ 自动跟唱</button>
+          <button class="ph-tab" id="sgFull">📄 全文注音</button>
+          <span class="rate-label">语速</span>
+          <div class="rate-group" id="sgRate">
+            <button data-r="0.5">0.5×</button>
+            <button data-r="0.75">0.75×</button>
+            <button data-r="1">1×</button>
+            <button data-r="1.25">1.25×</button>
+            <button data-r="1.5">1.5×</button>
+            <button data-r="2">2×</button>
+          </div>
+        </div>
+        <p class="tip" id="singStatus">点击任意歌词句可跳转；按「示范本句」听 AI 朗读，或「录音跟唱」唱一遍对比。</p>
+
+        <div class="lyric-panel" id="lyricPanel"></div>
+        <div class="song-notes" id="songNotes"></div>
+      </div>
+
+      <div class="card sing-words">
+        <div class="card-head"><h3>🎼 歌词常用字词小词典</h3><span class="chip chip-gold">唱 K 必备</span></div>
+        <div class="sw-grid" id="swGrid"></div>
+      </div>
+    </section>
+
+    <!-- ===== 语法 ===== -->
+    <section class="page" id="page-grammar">
+      <div class="page-head">
+        <div>
+          <h2>语法与表达专栏 <span class="jp-tag">Grammar</span></h2>
+          <p class="page-desc">粤语不只是「发音不同的普通话」——量词、语气词、体貌助词都有自己的一套逻辑。</p>
+        </div>
+      </div>
+      <div class="grammar-layout">
+        <div class="grammar-list" id="grammarList"></div>
+        <article class="grammar-article hidden" id="grammarArticle"></article>
+      </div>
+    </section>
+
+    <!-- ===== 文化 ===== -->
+    <section class="page" id="page-culture">
+      <div class="page-head">
+        <div>
+          <h2>文化趣知 <span class="jp-tag">Culture</span></h2>
+          <p class="page-desc">俗语有骨，歇后有刺，港式生活有滋有味。学语言，更要懂文化。</p>
+        </div>
+      </div>
+      <div class="ph-tabs">
+        <button class="ph-tab active" data-cul-tab="sayings">粤语俗语</button>
+        <button class="ph-tab" data-cul-tab="xiehou">歇后语</button>
+        <button class="ph-tab" data-cul-tab="life">港式文化</button>
+      </div>
+      <div class="culture-grid" id="cultureGrid"></div>
+    </section>
+
+    <!-- ===== 我的 / 进度 ===== -->
+    <section class="page" id="page-profile">
+      <div class="page-head">
+        <div>
+          <h2>学习进度追踪 <span class="jp-tag">Progress</span></h2>
+          <p class="page-desc">注册账号（本地存储）记录学习旅程：进度、收藏、历史、目标与提醒。</p>
+        </div>
+      </div>
+      <div id="profileBody"></div>
+    </section>
+  </main>
+
+  <!-- ======== 移动端底部导航 ======== -->
+  <nav class="m-nav">
+    <button class="m-nav-item active" data-nav="home"><span>🏠</span>首页</button>
+    <button class="m-nav-item" data-nav="phonetics"><span>🎙️</span>语音</button>
+    <button class="m-nav-item" data-nav="vocab"><span>📖</span>词汇</button>
+    <button class="m-nav-item" data-nav="sing"><span>🎵</span>唱歌</button>
+    <button class="m-nav-item" data-nav="dialogues"><span>💬</span>对话</button>
+    <button class="m-nav-item" data-nav="profile"><span>📊</span>进度</button>
+  </nav>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toast"></div>
+<script src="js/data.js"></script>
+<script src="js/songs.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

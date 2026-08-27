@@ -1,0 +1,1322 @@
+/* ============================================================
+   粵學堂 · 应用逻辑
+   ============================================================ */
+'use strict';
+
+/* ================= 工具 ================= */
+const $  = (s, el=document) => el.querySelector(s);
+const $$ = (s, el=document) => [...el.querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const todayKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const modalRoot = $('#modalRoot');
+const audioEl = new Audio();
+/* 粤拼去掉调号数字，仅作显示用（如 baa1 → baa） */
+const jq = s => String(s).replace(/[0-9]/g,'').trim();
+
+let toastTimer;
+function toast(msg){
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+function simpleHash(str){
+  let h = 5381;
+  for(let i=0;i<str.length;i++){ h = ((h<<5)+h+str.charCodeAt(i))|0; }
+  return (h>>>0).toString(36);
+}
+
+/* ================= 本地存储 ================= */
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+const ACCOUNTS_KEY = 'canto_accounts';
+const SESSION_KEY  = 'canto_session';
+
+/* 当前用户 */
+let currentUser = LS.get(SESSION_KEY, null);
+function accounts(){ return LS.get(ACCOUNTS_KEY, {}); }
+function progressKey(u){ return 'canto_progress_' + u; }
+function getProgress(){
+  if(!currentUser) return null;
+  return LS.get(progressKey(currentUser), {
+    favorites:[], learned:[], practices:[], quiz:[], dialogues:[],
+    checkins:{}, lastCheckin:null, streak:0,
+    goalCount:10, goalDate:null, goalToday:0, goalWords:[],
+    reminder:false, reminderSentDate:null, activities:[]
+  });
+}
+function saveProgress(p){ if(currentUser) LS.set(progressKey(currentUser), p); }
+
+/* 全局朗读语速（TTS） */
+let speechRate = LS.get('canto_speech_rate', 0.75);
+
+/* ================= 语音（TTS）================= */
+let voiceInfo = {status:'detecting', name:''};
+function refreshVoices(){
+  if(!('speechSynthesis' in window)){ voiceInfo = {status:'error', name:'浏览器不支持语音合成'}; updateVoiceUI(); return; }
+  const vs = speechSynthesis.getVoices();
+  const nameKey = v => ((v.name || '') + ' ' + (v.lang || '')).toLowerCase();
+  /* 粤语语音优先级：
+     1) lang 精确匹配 zh-HK / zh-MO / yue
+     2) lang 或名称含 香港 / 粤 / cantonese / hong kong
+     3) 其余任何中文语音兜底（可能是普通话，需提示）
+     注意：zh-TW（台湾）是国语/普通话，绝不能当粤语用 */
+  let yue =
+    vs.find(v => /^(zh[-_]?hk|zh[-_]?mo|yue)/i.test(v.lang || '')) ||
+    vs.find(v => /(zh[-_]?hk|zh[-_]?mo|yue)/i.test(nameKey(v))) ||
+    vs.find(v => /粤|cantonese|hong.?kong|香港/i.test(nameKey(v)));
+  const anyZh = vs.find(v => v.lang && v.lang.toLowerCase().startsWith('zh'));
+  if(yue) voiceInfo = {status:'ok', name:yue.name + '（' + yue.lang + '）', voice:yue};
+  else if(anyZh) voiceInfo = {status:'warn', name:anyZh.name + '（' + anyZh.lang + '）', voice:anyZh};
+  else voiceInfo = {status:'error', name:'未找到中文语音'};
+  renderVoiceDiag();
+  updateVoiceUI();
+}
+if('speechSynthesis' in window){
+  refreshVoices();
+  speechSynthesis.onvoiceschanged = refreshVoices;
+}
+function updateVoiceUI(){
+  let txt;
+  if(voiceInfo.status === 'ok') txt = '粤语语音：' + voiceInfo.name;
+  else if(voiceInfo.status === 'warn') txt = '⚠ 未检测到粤语语音，当前用 ' + voiceInfo.name + '（普通话）朗读，点「语音诊断」看如何设置';
+  else if(voiceInfo.status === 'error') txt = '未找到语音，发音示范不可用，点「语音诊断」';
+  else txt = '检测粤语语音…';
+  const el = $('#voiceBadgeTxt'), badge = $('#voiceBadge');
+  if(el) el.textContent = txt;
+  if(badge){
+    badge.className = 'voice-badge' + (voiceInfo.status==='ok'?' ok':voiceInfo.status==='warn'?' warn':'');
+  }
+  const side = $('#sideVoiceStatus');
+  if(side) side.textContent = '🔊 ' + txt;
+}
+/* 语音诊断面板：列出设备上所有中文/粤语语音，帮助用户排查 */
+function renderVoiceDiag(){
+  const box = $('#voiceDiagList');
+  if(!box) return;
+  if(!('speechSynthesis' in window)){ box.innerHTML = '<p class="diag-line">当前浏览器不支持语音合成（Web Speech API）。</p>'; return; }
+  const vs = speechSynthesis.getVoices();
+  const zh = vs.filter(v => /zh|yue/i.test((v.lang||'') + ' ' + (v.name||'')));
+  if(!zh.length){
+    box.innerHTML = '<p class="diag-line">⚠ 设备上没有任何中文语音，请先安装语音包（见下方指引）。</p>';
+    return;
+  }
+  box.innerHTML = zh.map(v => {
+    const isYue = /^(zh[-_]?hk|zh[-_]?mo|yue)/i.test(v.lang||'') || /粤|cantonese|hong.?kong|香港/i.test((v.name||'')+' '+(v.lang||''));
+    const isCur = voiceInfo.voice === v;
+    return `<div class="diag-line ${isYue?'diag-yue':''}">
+      <span class="diag-dot ${isCur?'diag-cur':''}"></span>
+      ${isYue?'🇭🇰 粤语':'🗣 非粤语'} · ${v.name} · <code>${v.lang}</code>${isCur?' ← 当前使用':''}
+    </div>`;
+  }).join('');
+}
+/* 只保留汉字用于朗读（去掉括号备注等） */
+function cleanForSpeech(t){
+  return String(t).replace(/[（(].*?[)）]/g,'').replace(/[^\u4e00-\u9fff\u3400-\u4dbf\uF900-\uFAFF]/g,'');
+}
+let currentUtterance = null;
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function speak(text, opts={}){
+  if(!('speechSynthesis' in window)) return;
+  if(!opts.queue) speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(cleanForSpeech(text));
+  if(voiceInfo.voice){
+    u.voice = voiceInfo.voice;
+    u.lang = voiceInfo.voice.lang;
+  } else {
+    u.lang = 'zh-HK';
+  }
+  if(isIOS){
+    /* iOS 会忽略 voice 只认 lang，强制 zh-HK（需系统已下载粤语语音包） */
+    u.lang = 'zh-HK';
+  }
+  u.rate = opts.rate ?? speechRate;
+  u.pitch = opts.pitch ?? 1.0;
+  currentUtterance = u;
+  speechSynthesis.speak(u);
+}
+function stopSpeak(){ if('speechSynthesis' in window) speechSynthesis.cancel(); }
+
+/* ================= 录音与发音评估 ================= */
+let mediaRecorder = null, chunks = [], recordedBlob = null, recording = false, recordedUrl = null;
+async function initRecorder(){
+  if(mediaRecorder) return true;
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => chunks.push(e.data);
+    mediaRecorder.onstop = async () => {
+      recordedBlob = new Blob(chunks, {type: chunks[0]?.type || 'audio/webm'});
+      chunks = [];
+      if(recordedUrl) URL.revokeObjectURL(recordedUrl);
+      recordedUrl = URL.createObjectURL(recordedBlob);
+      if(audioEl){ audioEl.src = recordedUrl; }
+      const pb = $('#ptPlayback');
+      if(pb) pb.disabled = false;
+      /* 自动评估 */
+      if(practiceTarget){
+        try{
+          const ana = await analyzeBlob(recordedBlob);
+          const res = evalRecord(practiceTarget, ana);
+          renderFeedback(res, practiceTarget);
+          $('#practiceStatus').textContent = '✅ 评估完成：' + practiceTarget.text;
+        }catch(e){
+          toast('音频分析失败，请重试');
+        }
+      }
+    };
+    return true;
+  }catch(e){
+    toast('无法访问麦克风，请检查浏览器权限');
+    return false;
+  }
+}
+function startRecord(){
+  if(recording) return;
+  initRecorder().then(ok => {
+    if(!ok) return;
+    recording = true;
+    chunks = [];
+    mediaRecorder.start();
+    const btn = $('#ptRecord');
+    if(btn){ btn.textContent = '⏹ 停止录音'; btn.classList.add('recording'); }
+    $('#practiceStatus').textContent = '🔴 录音中，请跟着念…';
+  });
+}
+function stopRecord(){
+  if(!recording) return;
+  recording = false;
+  mediaRecorder.stop();
+  const btn = $('#ptRecord');
+  if(btn){ btn.textContent = '● 重新录音'; btn.classList.remove('recording'); }
+}
+/* 音频分析：时长 + 响度 */
+async function analyzeBlob(blob){
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const buf = await ctx.decodeAudioData(await blob.arrayBuffer());
+  const data = buf.getChannelData(0);
+  let sum = 0;
+  for(let i=0;i<data.length;i+=4) sum += data[i]*data[i];
+  const rms = Math.sqrt(sum / Math.max(1, Math.ceil(data.length/4)));
+  ctx.close();
+  return {duration: buf.duration, rms};
+}
+/* 评估：时长匹配 + 响度（声调由用户自查参与） */
+let practiceTarget = null; // {text, jp, tonenum}
+function evalRecord(target, analysis){
+  const hanLen = cleanForSpeech(target.text).length || 1;
+  const expected = Math.max(0.6, hanLen * 0.34 + 0.35);
+  const ratio = analysis.duration / expected;
+  let durScore;
+  if(ratio >= 0.75 && ratio <= 1.35) durScore = 100 - Math.abs(ratio-1)*70;
+  else if(ratio >= 0.45 && ratio <= 1.8) durScore = 62 - Math.abs(ratio-1)*25;
+  else durScore = 40;
+  durScore = Math.max(30, Math.min(100, Math.round(durScore)));
+
+  let loudScore = Math.round(Math.min(100, analysis.rms / 0.05 * 100));
+  loudScore = Math.max(20, loudScore);
+
+  return {durScore, loudScore, expected};
+}
+function finalScore(res, toneOK){
+  const t = toneOK === true ? 100 : toneOK === false ? 40 : 75;
+  return Math.round(res.durScore*0.5 + res.loudScore*0.3 + t*0.2);
+}
+function renderFeedback(res, target, container){
+  const fb = container || $('#ptFeedback');
+  const openModal = !!container;
+  let toneSel = null; /* true=准 false=不准 */
+  const draw = () => {
+    const final = finalScore(res, toneSel);
+    const cls = final>=80?'good':final>=60?'mid':'low';
+    const tips = [];
+    if(res.durScore < 75) tips.push('时长偏差较大：标准示范约 ' + res.expected.toFixed(1) + ' 秒，注意节奏');
+    if(res.loudScore < 70) tips.push('音量偏小：读大声一点，放开来练');
+    if(toneSel === false) tips.push('自查声调不准：重点对比' + (target.tonenum ? '第 ' + target.tonenum + ' 声' : '声调') + '的升降起伏，多听标准音');
+    if(!tips.length) tips.push('时长、音量都不错！继续对比声调细节，保持练习节奏');
+    fb.innerHTML = `
+      <div class="fb-box">
+        <div class="fb-score ${cls}">${final}<small style="font-size:14px">分</small></div>
+        <div class="fb-detail">
+          <div class="fb-meter"><i style="width:${final}%;background:${final>=80?'var(--green)':final>=60?'var(--gold)':'var(--red)'}"></i></div>
+          <div class="fb-row">
+            <div class="fb-item">⏱ 时长 <b>${res.durScore}</b></div>
+            <div class="fb-item">🔊 音量 <b>${res.loudScore}</b></div>
+            <div class="fb-item">🎚 声调自查 <b>${toneSel===true?'✓ 准':toneSel===false?'✗ 不准':'待自查'}</b></div>
+          </div>
+        </div>
+        <div style="width:100%">
+          <div style="font-size:13px;font-weight:700;margin-bottom:7px">🎧 我的录音 vs 标准音</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-ghost sm" id="fbPlay">▶ 播放我的录音</button>
+            <button class="btn btn-ghost sm" id="fbDemo">🔊 再听标准音</button>
+          </div>
+          <div style="margin-top:12px;font-size:12.5px;color:var(--ink-2)">听对比后自查声调：</div>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <button class="btn btn-soft sm ${toneSel===true?'chip-red':''}" id="fbToneOk">✓ 我读啱咗</button>
+            <button class="btn btn-ghost sm ${toneSel===false?'chip-red':''}" id="fbToneBad">✗ 声调唔啱</button>
+          </div>
+        </div>
+        <div style="width:100%">💡 ${esc(tips.join('；'))}</div>
+      </div>`;
+    $('#fbPlay').onclick = () => { if(audioEl && recordedUrl) audioEl.play(); };
+    $('#fbDemo').onclick = () => speak(target.text);
+    const okBtn = $('#fbToneOk'), badBtn = $('#fbToneBad');
+    if(toneSel === true){ okBtn.style.background='var(--red)'; okBtn.style.color='#fff'; }
+    else if(toneSel === false){ badBtn.style.background='var(--red)'; badBtn.style.color='#fff'; }
+    $('#fbToneOk').onclick = () => { toneSel = true; draw(); };
+    $('#fbToneBad').onclick = () => { toneSel = false; draw(); };
+  };
+  draw();
+  logPractice('跟读', target.text, finalScore(res, null));
+}
+
+/* ================= 路由 ================= */
+const ROUTES = {home:'首页', phonetics:'语音学习', vocab:'场景词汇', dialogues:'对话实战', grammar:'语法专栏', culture:'文化趣知', profile:'学习进度'};
+let currentRoute = 'home';
+function navigate(route){
+  currentRoute = route;
+  $$('.page').forEach(p => p.classList.remove('active'));
+  const page = $('#page-' + route);
+  if(page) page.classList.add('active');
+  $$('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.nav === route));
+  $$('.m-nav-item').forEach(n => n.classList.toggle('active', n.dataset.nav === route));
+  window.scrollTo({top:0});
+  if(route === 'home') renderHome();
+  if(route === 'phonetics') renderPhonetics();
+  if(route === 'vocab') renderVocab();
+  if(route === 'dialogues') renderDialogues();
+  if(route === 'sing') renderSing();
+  if(route === 'grammar') renderGrammar();
+  if(route === 'culture') renderCulture();
+  if(route === 'profile') renderProfile();
+  // 关闭子视图
+  if(route !== 'dialogues'){ $('#dlgDetail').classList.add('hidden'); $('#dlgCards').classList.remove('hidden'); }
+  if(route !== 'sing'){ $('#singStage').classList.add('hidden'); $('#songCards').classList.remove('hidden'); }
+  if(route !== 'grammar'){ $('#grammarArticle').classList.add('hidden'); }
+}
+function logActivity(icon, title, sub, route){
+  const p = getProgress(); if(!p) return;
+  p.activities = p.activities || [];
+  p.activities.unshift({icon, title, sub, route, time:Date.now()});
+  p.activities = p.activities.slice(0,6);
+  saveProgress(p);
+}
+
+/* ================= 首页 ================= */
+function renderHome(){
+  const totalWords = DATA.vocabCategories.reduce((n,c)=>n+c.words.length,0);
+  $('#statWords').textContent = totalWords;
+  $('#statDialogues').textContent = DATA.dialogues.length;
+  $('#statArticles').textContent = DATA.grammar.length;
+  $('#statCulture').textContent = DATA.culture.sayings.length + DATA.culture.xiehou.length + DATA.culture.life.length;
+
+  const p = getProgress();
+  if(p){
+    const today = todayKey();
+    if(p.goalDate !== today){ p.goalDate = today; p.goalToday = 0; p.goalWords = []; saveProgress(p); }
+    const pct = p.goalCount ? Math.min(100, Math.round(p.goalToday / p.goalCount * 100)) : 0;
+    $('#goalNum').textContent = p.goalToday;
+    $('#goalChip').textContent = p.goalCount ? `每日 ${p.goalCount} 词` : '未设定';
+    $('#goalLine').textContent = p.goalToday >= p.goalCount && p.goalCount ? '🎉 今日目标达成，犀利！' : `今日已学 ${p.goalToday} / ${p.goalCount} 个词汇`;
+    const ring = $('#goalRing');
+    ring.style.strokeDashoffset = 326.7 * (1 - pct/100);
+    /* 连续打卡 */
+    const days = last7();
+    $('#streakWeek').innerHTML = days.map(d => {
+      const on = !!p.checkins[d.key];
+      return `<div class="streak-day ${on?'on':''} ${d.isToday?'today':''}"><span class="sd-ico">${on?'✅':d.isToday?'📌':'·'}</span>${d.label}</div>`;
+    }).join('');
+    $('#streakChip').textContent = p.streak + ' 天';
+    /* 继续学习 */
+    const acts = (p.activities||[]).slice(0,3);
+    $('#continueList').innerHTML = acts.length ? acts.map(a => `
+      <div class="cont-item" data-nav="${a.route}">
+        <span class="ci-ico">${a.icon}</span>
+        <div><div class="ci-title">${esc(a.title)}</div><div class="ci-sub">${esc(a.sub)}</div></div>
+        <span class="ci-arrow">→</span>
+      </div>`).join('') : `<div class="history-empty" style="border:none;padding:14px">还没有学习记录，去逛逛吧～</div>`;
+    $$('#continueList .cont-item').forEach(el => el.onclick = () => navigate(el.dataset.nav));
+  } else {
+    $('#goalChip').textContent = '未登录';
+    $('#goalRing').style.strokeDashoffset = 326.7;
+    $('#goalNum').textContent = '—';
+    $('#goalLine').textContent = '注册登录后即可记录进度、打卡和设定每日目标。';
+    $('#streakChip').textContent = '0 天';
+    $('#streakWeek').innerHTML = last7().map(d=>`<div class="streak-day ${d.isToday?'today':''}"><span class="sd-ico">${d.isToday?'📌':'·'}</span>${d.label}</div>`).join('');
+    $('#continueList').innerHTML = `<div class="history-empty" style="border:none;padding:14px">登录后这里会显示你的学习足迹</div>`;
+  }
+  /* 模块入口 */
+  const mods = [
+    {ico:'🎙️', t:'语音学习', d:'粤拼声母 · 韵母 · 声调，录音对比发音', nav:'phonetics'},
+    {ico:'📖', t:'场景词汇', d:'8 大生活场景，92 个高频词 + 听力小测', nav:'vocab'},
+    {ico:'💬', t:'对话实战', d:'茶楼点餐、街市买菜，跟读 + 角色扮演', nav:'dialogues'},
+    {ico:'🎵', t:'学唱粤语歌', d:'11 首经典金曲全曲歌词，逐句跟唱练咬字', nav:'sing'},
+    {ico:'🧩', t:'语法专栏', d:'量词 · 语气词 · 体貌助词，十讲吃透', nav:'grammar'},
+    {ico:'🏮', t:'文化趣知', d:'俗语歇后语，港式生活冷知识', nav:'culture'},
+    {ico:'📊', t:'学习进度', d:'目标 · 打卡 · 收藏 · 练习历史', nav:'profile'},
+  ];
+  $('#moduleGrid').innerHTML = mods.map(m => `
+    <div class="mod-card" data-nav="${m.nav}">
+      <div class="mc-ico">${m.ico}</div>
+      <h3>${m.t}</h3><p>${m.d}</p><span class="mc-go">进入 →</span>
+    </div>`).join('');
+  $$('#moduleGrid .mod-card').forEach(el => el.onclick = () => navigate(el.dataset.nav));
+}
+function last7(){
+  const out = [];
+  for(let i=6;i>=0;i--){
+    const d = new Date(); d.setDate(d.getDate()-i);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    out.push({key, label:['日','一','二','三','四','五','六'][d.getDay()], isToday:i===0});
+  }
+  return out;
+}
+function checkin(){
+  const p = getProgress();
+  if(!p){ toast('请先注册登录再打卡'); navigate('profile'); return; }
+  const today = todayKey();
+  if(p.checkins[today]){ toast('今日已经打过卡啦 ✅'); return; }
+  p.checkins[today] = true;
+  p.lastCheckin = today;
+  /* 计算连续天数 */
+  let streak = 1, d = new Date();
+  for(let i=1;i<730;i++){
+    d.setDate(d.getDate()-1);
+    const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    if(p.checkins[k]) streak++;
+    else break;
+  }
+  p.streak = streak;
+  saveProgress(p);
+  toast('打卡成功！连续 ' + streak + ' 天 🔥');
+  renderHome();
+}
+
+/* ================= 语音系统 ================= */
+let phTab = 'initials', phSel = null;
+function renderPhonetics(){
+  /* 更新计数 */
+  $$('.ph-tab span')[0].textContent = DATA.initials.length;
+  $$('.ph-tab span')[1].textContent = DATA.finals.length;
+  $$('.ph-tab span')[2].textContent = DATA.tones.length;
+  renderPhGrid();
+}
+function renderPhGrid(){
+  const q = ($('#phSearch').value || '').trim().toLowerCase();
+  let items;
+  if(phTab === 'initials') items = DATA.initials.map(i => ({sym:i.sym, sub:jq(i.exjp), ex:i.ex, exjp:i.exjp}));
+  else if(phTab === 'finals') items = DATA.finals.map(f => ({sym:f.sym, sub:jq(f.exjp), ex:f.ex, exjp:f.exjp, grp:f.grp}));
+  else items = DATA.tones.map(t => ({sym:t.num, sub:t.contour, ex:t.ex, exjp:t.exjp, tone:t}));
+  if(q) items = items.filter(i => (i.sym+qString(i)).toLowerCase().includes(q));
+  $('#phGrid').innerHTML = items.map((it,idx) => `
+    <div class="ph-card ${phSel && phSel.sym===it.sym && phSel.tab===phTab?'sel':''}" data-idx="${idx}" style="animation:pageIn .4s ${idx*0.015}s backwards">
+      <span class="pc-vol">🔊</span>
+      <div class="pc-sym">${it.sym}</div>
+      <div class="pc-jp">${it.sub}</div>
+      <div class="pc-ex">${it.ex}</div>
+    </div>`).join('') || '<div class="history-empty" style="grid-column:1/-1">没有匹配的音标</div>';
+  $$('#phGrid .ph-card').forEach(card => {
+    card.onclick = () => {
+      const it = items[+card.dataset.idx];
+      phSel = {tab:phTab, sym:it.sym, item:it};
+      renderPhGrid();
+      speakPhItem(it);
+      setPracticeTarget(it);
+    };
+  });
+}
+function qString(it){ return (it.ex||'') + (it.sub||''); }
+function speakPhItem(it, opts={}){
+  const ex = String(it.ex || '').split(/[\/\s、]+/)[0] || it.sym;
+  speak(ex, {...opts});
+}
+function setPracticeTarget(it){
+  const ex = String(it.ex || '').split(/[\/\s、]+/)[0] || it.sym;
+  const toneNum = it.tone ? it.tone.num : null;
+  practiceTarget = {text: ex, jp: it.sub || it.sym, tonenum: toneNum};
+  $('#practiceTarget').innerHTML = `
+    <div class="pt-symbol">${ex}</div>
+    <div class="pt-word">${it.sym} · ${it.sub}</div>`;
+  $('#practiceStatus').textContent = '就绪：跟读「' + ex + '」';
+  $('#ptFeedback').innerHTML = '';
+  if(audioEl) audioEl.pause();
+}
+
+/* ================= 词汇 ================= */
+let vocabCat = DATA.vocabCategories[0].id, vocabFavOnly = false;
+function renderVocab(){
+  const pills = DATA.vocabCategories.map(c => `
+    <button class="cat-pill ${c.id===vocabCat?'active':''}" data-cat="${c.id}">${c.icon} ${c.name} <small style="opacity:.7">${c.words.length}</small></button>`).join('');
+  $('#catPills').innerHTML = pills;
+  $$('#catPills .cat-pill').forEach(b => b.onclick = () => { vocabCat = b.dataset.cat; renderVocabGrid(); renderVocab(); });
+  renderVocabGrid();
+}
+function renderVocabGrid(){
+  const cat = DATA.vocabCategories.find(c => c.id === vocabCat);
+  const q = ($('#vocabSearch').value || '').trim().toLowerCase();
+  const p = getProgress();
+  let words = cat.words;
+  if(q) words = words.filter(w => (w.han + ' ' + w.jp + ' ' + w.mand + ' ' + w.ex).toLowerCase().includes(q));
+  if(vocabFavOnly) words = words.filter(w => p && p.favorites.includes(cat.id + ':' + w.han));
+  $('#vocabGrid').innerHTML = words.map((w,idx) => {
+    const favKey = cat.id + ':' + w.han;
+    const fav = p && p.favorites.includes(favKey);
+    return `
+    <div class="word-card" style="animation:pageIn .4s ${idx*0.02}s backwards">
+      <div class="wc-top">
+        <div>
+          <div class="wc-han">${w.han}</div>
+          <div class="wc-jp">${w.jp}</div>
+        </div>
+        <button class="wc-fav ${fav?'on':''}" title="收藏">${fav?'★':'☆'}</button>
+      </div>
+      <div class="wc-mand">${esc(w.mand)}</div>
+      <div class="wc-ex">
+        ${esc(w.ex)}
+        <div class="wx-jp">${w.exjp}</div>
+        <div class="wx-mand">${esc(w.exmand)}</div>
+      </div>
+      <div class="wc-bottom"><span class="wc-cat">${cat.icon} ${cat.name}</span></div>
+      <button class="wc-play" title="听发音">▶</button>
+    </div>`;
+  }).join('') || '<div class="history-empty" style="grid-column:1/-1">没有匹配的词汇</div>';
+
+  $$('#vocabGrid .word-card').forEach((card, i) => {
+    const w = words[i];
+    const playBtn = $('.wc-play', card);
+    playBtn.onclick = () => {
+      speak(w.han);
+      markWordLearned(cat.id, w);
+    };
+    $('.wc-fav', card).onclick = e => {
+      e.stopPropagation();
+      toggleFav(cat.id, w, card);
+    };
+  });
+}
+function markWordLearned(catId, w){
+  const p = getProgress(); if(!p) return;
+  const key = catId + ':' + w.han;
+  if(!p.learned.includes(key)) p.learned.push(key);
+  const today = todayKey();
+  if(p.goalDate !== today){ p.goalDate = today; p.goalToday = 0; p.goalWords = []; }
+  p.goalWords = p.goalWords || [];
+  /* 每日目标只统计当天不重复的词汇 */
+  if(!p.goalWords.includes(key)){
+    p.goalWords.push(key);
+    p.goalToday = (p.goalToday||0) + 1;
+  }
+  saveProgress(p);
+}
+function toggleFav(catId, w, card){
+  const p = getProgress();
+  if(!p){ toast('请先注册登录，才能收藏生词'); navigate('profile'); return; }
+  const key = catId + ':' + w.han;
+  const i = p.favorites.indexOf(key);
+  if(i >= 0){ p.favorites.splice(i,1); $('.wc-fav', card).textContent = '☆'; $('.wc-fav', card).classList.remove('on'); toast('已取消收藏'); }
+  else { p.favorites.push(key); $('.wc-fav', card).textContent = '★'; $('.wc-fav', card).classList.add('on'); toast('已收藏生词 ★'); }
+  saveProgress(p);
+}
+
+/* 听力小测 */
+function openQuiz(){
+  const p = getProgress();
+  if(!p){ toast('请先登录再参加小测'); navigate('profile'); return; }
+  const all = DATA.vocabCategories.flatMap(c => c.words.map(w => ({...w, cat:c.name})));
+  const pool = [...all].sort(() => Math.random() - 0.5).slice(0, 8);
+  let qi = 0, score = 0;
+  const renderQ = () => {
+    if(qi >= pool.length) return renderEnd();
+    const w = pool[qi];
+    const opts = shuffleOpts(w, all);
+    modalRoot.innerHTML = `
+      <div class="modal-mask" id="qMask"><div class="modal">
+        <h3>📝 听力小测 <span class="chip chip-gold" style="margin-left:auto">${qi+1} / ${pool.length}</span><button id="qCloseX" style="border:none;background:none;font-size:18px;cursor:pointer;color:var(--ink-3);padding:2px 6px" title="关闭">✕</button></h3>
+        <div class="quiz-q">🔊 听发音</div>
+        <div class="quiz-jp">（点击播放，猜猜是哪个意思）</div>
+        <div style="text-align:center;margin:6px 0 18px">
+          <button class="btn btn-primary" id="qPlay">🔊 播放</button>
+          <button class="btn btn-ghost" id="qReplay">↻ 重听</button>
+        </div>
+        ${opts.map((o,i) => `<button class="quiz-opt" data-opt="${i}">${i+1}. ${esc(o.mand)}</button>`).join('')}
+        <div class="quiz-progress">答对 ${score} 题 · 已过 ${qi} 题</div>
+      </div></div>`;
+    $('#qCloseX').onclick = () => { modalRoot.innerHTML = ''; };
+    $('#qMask').addEventListener('click', e => { if(e.target.id === 'qMask') modalRoot.innerHTML = ''; });
+    $('#qPlay').onclick = () => speak(w.han);
+    $('#qReplay').onclick = () => speak(w.han);
+    speak(w.han);
+    $$('#modalRoot .quiz-opt').forEach(b => b.onclick = () => {
+      const correct = opts[+b.dataset.opt].mand === w.mand;
+      $$('#modalRoot .quiz-opt').forEach(x => {
+        x.disabled = true;
+        const isC = opts[+x.dataset.opt].mand === w.mand;
+        x.classList.add(isC?'correct':'wrong');
+        if(isC) x.textContent = x.textContent + ' ✓';
+      });
+      if(correct){ score++; toast('答啱咗！犀利 👍'); }
+      else toast('正确答案：' + w.mand);
+      setTimeout(() => { qi++; renderQ(); }, 1300);
+    });
+  };
+  const renderEnd = () => {
+    const pct = Math.round(score/pool.length*100);
+    logPractice('听力小测', vocabCatName(), pct);
+    modalRoot.innerHTML = `
+      <div class="modal-mask"><div class="modal">
+        <div class="quiz-end">
+          <div style="font-size:40px">${pct>=80?'🏆':pct>=60?'💪':'📚'}</div>
+          <div class="qe-score">${score} / ${pool.length}</div>
+          <p class="qe-txt">${pct>=80?'好犀利！粤语听力达人！':pct>=60?'唔错！继续加油！':'再听多几次，慢慢来～'}</p>
+          <button class="btn btn-primary" id="qAgain">🔁 再来一轮</button>
+          <button class="btn btn-ghost" id="qClose" style="margin-left:8px">关闭</button>
+        </div>
+      </div></div>`;
+    $('#qAgain').onclick = () => openQuiz();
+    $('#qClose').onclick = () => { modalRoot.innerHTML = ''; };
+  };
+  renderQ();
+}
+function shuffleOpts(w, all){
+  const wrong = all.filter(x => x.mand !== w.mand).sort(() => Math.random() - 0.5).slice(0,3).map(x => ({mand: x.mand}));
+  return [{mand:w.mand}, ...wrong].sort(() => Math.random() - 0.5);
+}
+function vocabCatName(){ const c = DATA.vocabCategories.find(c => c.id===vocabCat); return c ? c.name : '词汇'; }
+
+/* ================= 对话 ================= */
+let curDlg = null, dlgRole = null, dlgMode = 'follow', dlgRevealed = false;
+function renderDialogues(){
+  $('#dlgDetail').classList.add('hidden');
+  $('#dlgCards').classList.remove('hidden');
+  const p = getProgress();
+  $('#dlgCards').innerHTML = DATA.dialogues.map(d => {
+    const done = p && p.dialogues.includes(d.id);
+    return `
+    <div class="dlg-card" data-id="${d.id}" style="animation:pageIn .4s ${DATA.dialogues.indexOf(d)*0.05}s backwards">
+      <span class="dc-emoji">${d.emoji}</span>
+      <h3>${d.title}</h3>
+      <p>${esc(d.desc)}</p>
+      <div class="dc-lines">共 ${d.lines.length} 句台词 · 水平 ${d.level}</div>
+      <div class="dc-tags">
+        <span class="dc-tag">${d.level}</span>
+        ${d.tags.map(t=>`<span class="dc-tag">${t}</span>`).join('')}
+      </div>
+      ${done ? '<div class="dc-progress" style="width:100%"></div>' : ''}
+    </div>`;
+  }).join('');
+  $$('#dlgCards .dlg-card').forEach(c => c.onclick = () => openDlg(c.dataset.id));
+}
+function openDlg(id){
+  curDlg = DATA.dialogues.find(d => d.id === id);
+  dlgRole = null; dlgMode = 'follow'; dlgRevealed = false;
+  $('#dlgCards').classList.add('hidden');
+  $('#dlgDetail').classList.remove('hidden');
+  logActivity(curDlg.emoji, curDlg.title, '进入对话场景', 'dialogues');
+  renderDlg();
+}
+function renderDlg(){
+  if(!curDlg) return;
+  const d = curDlg;
+  const roles = [...new Set(d.lines.map(l => l.speaker))];
+  $('#dlgStage').innerHTML = `
+    <div class="dlg-title"><span class="dt-emoji">${d.emoji}</span>
+      <div><h3>${d.title}</h3><div class="page-desc" style="margin-top:2px">${esc(d.desc)}</div></div>
+    </div>
+    <div class="dlg-mode-bar">
+      <button class="ph-tab ${dlgMode==='follow'?'active':''}" id="modeFollow">📖 逐句跟读</button>
+      <button class="ph-tab ${dlgMode==='role'?'active':''}" id="modeRole">🎭 角色扮演</button>
+      ${dlgMode==='role' ? `
+        <span style="font-size:13px;color:var(--ink-2);margin-left:6px">扮演：</span>
+        ${roles.map(r => `<button class="ph-tab ${dlgRole===r?'active':''}" data-role="${esc(r)}">${esc(r)}</button>`).join('')}
+      ` : ''}
+      ${dlgMode==='role' && dlgRole ? `
+        <button class="btn btn-primary sm" id="roleStart">▶ 播放对方台词</button>
+        <button class="btn btn-ghost sm" id="roleShow" style="display:none">👀 查看答案</button>
+        <button class="btn btn-ghost sm" id="roleReset">↻ 重置</button>
+      ` : ''}
+    </div>
+    <div class="dlg-lines" id="dlgLines">
+      ${d.lines.map((l,i) => `
+        <div class="dlg-line ${dlgMode==='role' && dlgRole===l.speaker && !dlgRevealed ? 'hidden-line' : ''}" data-i="${i}">
+          <div class="dl-speaker">${l.speaker==='侍应'?'🧑‍🍳':l.speaker==='食客'?'🧔':l.speaker==='档主'?'👩‍🌾':l.speaker==='顾客'?'🛍️':l.speaker==='乘客'?'🧳':l.speaker==='司机'?'🚌':l.speaker==='游客'?'🧢':l.speaker==='路人'?'🚶':l.speaker==='护士'?'👩‍⚕️':l.speaker==='病人'?'🤒':'💬'}</div>
+          <div class="dl-body">
+            <div class="dl-name">${esc(l.speaker)}</div>
+            <div class="dl-text">${esc(l.han)}</div>
+            <div class="dl-jp">${l.jp}</div>
+            <div class="dl-mand">${esc(l.mand)}</div>
+            ${dlgMode==='follow' ? `
+              <div class="dl-tools">
+                <button class="dl-btn" data-act="play" data-i="${i}">🔊 听</button>
+                <button class="dl-btn rec" data-act="rec" data-i="${i}">🎤 跟读</button>
+              </div>` : dlgRole===l.speaker ? `
+              <div class="dl-tools">
+                <button class="dl-btn" data-act="play" data-i="${i}">🔊 听答案</button>
+              </div>` : ''}
+          </div>
+        </div>`).join('')}
+    </div>`;
+  /* 事件 */
+  $('#modeFollow').onclick = () => { dlgMode='follow'; dlgRole=null; dlgRevealed=false; renderDlg(); };
+  $('#modeRole').onclick = () => { dlgMode='role'; dlgRole=roles[0]; dlgRevealed=false; renderDlg(); };
+  $$('[data-role]').forEach(b => b.onclick = () => { dlgRole = b.dataset.role; dlgRevealed=false; renderDlg(); });
+  const rs = $('#roleStart'); if(rs) rs.onclick = roleStart;
+  const rsh = $('#roleShow'); if(rsh) rsh.onclick = roleShow;
+  const rrst = $('#roleReset'); if(rrst) rrst.onclick = () => { dlgRevealed=false; renderDlg(); };
+  $$('#dlgLines .dl-btn').forEach(b => {
+    const i = +b.dataset.i;
+    if(b.dataset.act === 'play'){
+      b.onclick = () => {
+        const l = curDlg.lines[i];
+        speak(l.han);
+        highlightLine(i);
+      };
+    } else if(b.dataset.act === 'rec'){
+      b.onclick = () => followRecord(i, b);
+    }
+  });
+}
+function highlightLine(i){
+  $$('#dlgLines .dlg-line').forEach((el,idx) => el.classList.toggle('current', idx===i));
+}
+let followRec = {rec:false, mr:null, chunks:[]};
+async function followRecord(i, btn){
+  if(followRec.rec){ followRec.rec = false; followRec.mr && followRec.mr.stop(); btn.textContent='🎤 跟读'; btn.classList.remove('recording'); return; }
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    const mr = new MediaRecorder(stream);
+    const ch = [];
+    mr.ondataavailable = e => ch.push(e.data);
+    mr.onstop = async () => {
+      const blob = new Blob(ch, {type:ch[0]?.type||'audio/webm'});
+      const ana = await analyzeBlob(blob);
+      const l = curDlg.lines[i];
+      const res = evalRecord({text:l.han}, ana);
+      modalRoot.innerHTML = `<div class="modal-mask"><div class="modal"><h3>🎤 跟读评估 <span class="chip chip-green" style="margin-left:auto">第 ${i+1} 句</span></h3><div id="ptFeedback"></div><div style="text-align:center;margin-top:16px"><button class="btn btn-ghost sm" id="evalClose">关闭</button></div></div></div>`;
+      renderFeedback(res, {text:l.han, jp:l.jp}, $('#ptFeedback'));
+      $('#evalClose').onclick = () => { modalRoot.innerHTML = ''; };
+      stream.getTracks().forEach(t=>t.stop());
+    };
+    followRec.mr = mr; followRec.rec = true;
+    mr.start();
+    btn.textContent = '⏹ 停止'; btn.classList.add('recording');
+    speak(curDlg.lines[i].han); // 先示范
+    toast('先听示范，然后跟读这句');
+  }catch(e){ toast('无法访问麦克风'); }
+}
+function roleStart(){
+  if(!dlgRole) return;
+  const d = curDlg;
+  const partner = d.lines.filter(l => l.speaker !== dlgRole);
+  const mine = d.lines.filter(l => l.speaker === dlgRole);
+  let i = 0;
+  const step = () => {
+    if(i >= partner.length){
+      const show = $('#roleShow');
+      if(show){ show.style.display='inline-flex'; }
+      toast('轮到你啦！读出你的台词 🎤');
+      highlightLine(-1);
+      return;
+    }
+    const l = partner[i];
+    highlightLine(d.lines.indexOf(l));
+    speak(l.han);
+    i++;
+    setTimeout(step, 1100 + cleanForSpeech(l.han).length * 420);
+  };
+  step();
+}
+function roleShow(){
+  const d = curDlg;
+  stopSpeak();
+  const mine = d.lines.filter(l => l.speaker === dlgRole);
+  mine.forEach((l,idx) => setTimeout(() => speak(l.han, {queue:true}), idx * 1800));
+  $$('#dlgLines .dlg-line').forEach(el => el.classList.remove('hidden-line'));
+  const p = getProgress();
+  if(p && !p.dialogues.includes(d.id)){
+    p.dialogues.push(d.id);
+    logActivity(d.emoji, d.title, '完成角色扮演练习', 'dialogues');
+    saveProgress(p);
+    toast('完成练习！已记入进度 🎉');
+  }
+  dlgRevealed = true; /* 揭示后不再重新隐藏台词 */
+  renderDlg(); /* 显示所有台词 */
+  const show = $('#roleShow'); if(show) show.style.display='none';
+}
+
+/* ================= 语法 ================= */
+let curGrammar = null, lastGrammarLog = null;
+function renderGrammar(){
+  $('#grammarList').innerHTML = DATA.grammar.map(g => `
+    <button class="grammar-item ${curGrammar && curGrammar.id===g.id?'active':''}" data-gid="${g.id}">
+      <div class="gi-num">LESSON ${g.num}</div>
+      <h4>${esc(g.title)}</h4>
+      <p>${esc(g.intro.slice(0,34))}…</p>
+    </button>`).join('');
+  $$('#grammarList .grammar-item').forEach(b => b.onclick = () => { curGrammar = DATA.grammar.find(g=>g.id===b.dataset.gid); renderGrammar(); renderGrammarArticle(); });
+  renderGrammarArticle();
+}
+function renderGrammarArticle(){
+  const g = curGrammar || DATA.grammar[0];
+  if(!g) return;
+  if(!curGrammar) curGrammar = g;
+  $('#grammarArticle').classList.remove('hidden');
+  $('#grammarArticle').innerHTML = `
+    <div class="ga-head">
+      <div class="gi-num" style="color:var(--gold);font-weight:700;letter-spacing:2px">LESSON ${g.num}</div>
+      <h2>${esc(g.title)}</h2>
+      <p class="ga-intro">${esc(g.intro)}</p>
+    </div>
+    ${g.sections.map(s => s.type==='table' ? `
+      <div class="ga-block">
+        <h4>${esc(s.h)}</h4>
+        <div style="overflow-x:auto"><table class="ga-table">
+          <tr>${s.head.map(h=>`<th>${esc(h)}</th>`).join('')}</tr>
+          ${s.rows.map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('')}
+        </table></div>
+      </div>` : s.type==='note' ? `
+      <div class="ga-note">💡 ${esc(s.body)}</div>` : `
+      <div class="ga-block"><h4>${esc(s.h)}</h4><p style="font-size:14.5px;color:var(--ink-2)">${esc(s.body)}</p></div>`).join('')}
+    <div class="ga-block">
+      <h4>例句练习</h4>
+      ${g.examples.map(ex => `
+        <div class="ga-example" data-ex="${esc(ex.han)}">
+          <span class="ge-play">🔊</span>
+          <div class="ge-han">${esc(ex.han)}</div>
+          <div class="ge-jp">${ex.jp}</div>
+          <div class="ge-mand">${esc(ex.mand)}</div>
+        </div>`).join('')}
+    </div>`;
+  if(lastGrammarLog !== g.id){ lastGrammarLog = g.id; logActivity('🧩', g.title, '阅读语法专栏', 'grammar'); }
+  $$('#grammarArticle .ga-example').forEach(el => el.onclick = () => speak(el.dataset.ex));
+}
+
+/* ================= 文化 ================= */
+let culTab = 'sayings';
+function renderCulture(){
+  const d = DATA.culture;
+  let items = [];
+  if(culTab === 'sayings') items = d.sayings.map(s => ({...s, badge:'俗语', cls:'', play:s.han}));
+  else if(culTab === 'xiehou') items = d.xiehou.map(x => ({...x, badge:'歇后语', cls:'cul-life', play:x.front + '——' + x.back}));
+  else items = d.life.map(l => ({...l, badge:l.tag, cls:'cul-life', play:l.title}));
+  $('#cultureGrid').innerHTML = items.map((it,i) => `
+    <div class="cul-card ${it.cls}" style="animation:pageIn .4s ${i*0.05}s backwards">
+      <span class="cc-badge">${esc(it.badge)}</span>
+      ${culTab==='life' ? `<h3>${esc(it.title)}</h3>` : culTab==='xiehou' ? `<h3>${esc(it.front)} <span style="color:var(--ink-3);font-size:14px">—— ${esc(it.back)}</span></h3><div class="cc-jp">${esc(it.jp||'')}</div>` : `<h3>${esc(it.han)}</h3><div class="cc-jp">${esc(it.jp||'')}</div>`}
+      ${culTab==='life' ? `<div class="cc-meaning" style="margin-top:8px">${esc(it.desc)}</div>` : `<div class="cc-han">${culTab==='xiehou' ? esc(it.front)+' —— '+esc(it.back) : esc(it.meaning)}</div>`}
+      <div class="cc-story">📖 ${esc(it.story)}</div>
+      <button class="cc-play" title="朗读">▶</button>
+    </div>`).join('');
+  $$('#cultureGrid .cc-play').forEach((b,i) => b.onclick = () => {
+    const it = items[i];
+    speak(it.play);
+  });
+}
+
+/* ================= 学习进度 / 账号 ================= */
+function renderProfile(){
+  const body = $('#profileBody');
+  if(!currentUser){
+    body.innerHTML = `
+      <div class="auth-wrap">
+        <div class="auth-card">
+          <h3>${authMode==='login'?'登入':'注册'} · 粵學堂</h3>
+          <p class="auth-sub">本地账号（数据保存在浏览器），登录后可记录进度、收藏与打卡</p>
+          <div class="field"><label>用户名</label><input id="auName" placeholder="输入用户名" autocomplete="off"></div>
+          ${authMode==='register' ? `<div class="field"><label>昵称（可选）</label><input id="auNick" placeholder="怎么称呼你" autocomplete="off"></div>` : ''}
+          <div class="field"><label>密码</label><input id="auPass" type="password" placeholder="${authMode==='register'?'设置密码（至少4位）':'输入密码'}"></div>
+          ${authMode==='register' ? `<div class="field"><label>确认密码</label><input id="auPass2" type="password" placeholder="再输入一次"></div>` : ''}
+          <div class="auth-err" id="authErr"></div>
+          <button class="btn btn-primary" style="width:100%;justify-content:center" id="authSubmit">${authMode==='login'?'登 入':'注 册'}</button>
+          <div class="auth-switch">${authMode==='login'?'还没有账号？':'已有账号？'} <button id="authToggle">${authMode==='login'?'去注册':'去登录'}</button></div>
+        </div>
+      </div>`;
+    const err = $('#authErr');
+    $('#authToggle').onclick = () => { authMode = authMode==='login'?'register':'login'; renderProfile(); };
+    $('#authSubmit').onclick = () => {
+      const name = $('#auName').value.trim();
+      const pass = $('#auPass').value;
+      if(authMode === 'register'){
+        const nick = $('#auNick').value.trim();
+        const pass2 = $('#auPass2').value;
+        if(name.length < 2) return err.textContent = '用户名至少 2 个字符';
+        if(pass.length < 4) return err.textContent = '密码至少 4 位';
+        if(pass !== pass2) return err.textContent = '两次密码不一致';
+        const acc = accounts();
+        if(acc[name]) return err.textContent = '用户名已存在，换一个吧';
+        acc[name] = {hash: simpleHash(pass), nick: nick || name, createdAt: Date.now()};
+        LS.set(ACCOUNTS_KEY, acc);
+        currentUser = name;
+        LS.set(SESSION_KEY, name);
+        toast('注册成功，欢迎你，' + nick + '！🎉');
+        renderProfile(); renderHome();
+      } else {
+        const acc = accounts();
+        if(!acc[name]) return err.textContent = '用户不存在';
+        if(acc[name].hash !== simpleHash(pass)) return err.textContent = '密码错误';
+        currentUser = name;
+        LS.set(SESSION_KEY, name);
+        toast('欢迎回来，' + acc[name].nick + '！');
+        renderProfile(); renderHome();
+      }
+    };
+    return;
+  }
+  const p = getProgress();
+  const user = accounts()[currentUser];
+  const favItems = p.favorites.map(k => {
+    const [cid, han] = k.split(':');
+    const cat = DATA.vocabCategories.find(c => c.id===cid);
+    const w = cat && cat.words.find(x => x.han===han);
+    return w ? {cat, w} : null;
+  }).filter(Boolean);
+  const today = todayKey();
+  if(p.goalDate !== today){ p.goalDate = today; p.goalToday = 0; p.goalWords = []; saveProgress(p); }
+
+  body.innerHTML = `
+    <div class="profile-grid">
+      <div class="stat-card"><div class="sc-ico">📚</div><b>${p.learned.length}</b><span>已学词汇</span></div>
+      <div class="stat-card"><div class="sc-ico">⭐</div><b>${p.favorites.length}</b><span>收藏生词</span></div>
+      <div class="stat-card"><div class="sc-ico">🎤</div><b>${p.practices.length}</b><span>练习次数</span></div>
+      <div class="stat-card"><div class="sc-ico">💬</div><b>${p.dialogues.length}/${DATA.dialogues.length}</b><span>完成对话</span></div>
+      <div class="stat-card"><div class="sc-ico">🔥</div><b>${p.streak}</b><span>连续打卡（天）</span></div>
+      <div class="stat-card"><div class="sc-ico">🎯</div><b>${p.goalToday}/${p.goalCount}</b><span>今日目标</span></div>
+    </div>
+    <div class="profile-cols">
+      <div class="profile-col">
+        <h3>🎯 每日目标与提醒</h3>
+        <div class="setting-row">
+          <div><div class="sr-label">每日学习目标</div><div class="sr-sub">每天要学多少个词汇</div></div>
+          <div class="num-stepper">
+            <button id="goalMinus">−</button><b id="goalVal">${p.goalCount}</b><button id="goalPlus">+</button>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div><div class="sr-label">每日提醒</div><div class="sr-sub">当天目标未达成时通知你</div></div>
+          <button class="switch ${p.reminder?'on':''}" id="remindSwitch"></button>
+        </div>
+        <div class="setting-row">
+          <div><div class="sr-label">今日打卡</div><div class="sr-sub">${p.checkins[today] ? '今日已打卡 ✅' : '还没打卡，记得点一下'}</div></div>
+          <button class="btn btn-soft sm" id="checkinBtn2">${p.checkins[today]?'✓ 已打卡':'✍️ 打卡'}</button>
+        </div>
+        <div class="setting-row">
+          <div><div class="sr-label">账号：${esc(user.nick || currentUser)}</div><div class="sr-sub">注册于 ${new Date(user.createdAt).toLocaleDateString()}</div></div>
+          <button class="btn btn-ghost sm" id="logoutBtn">退出登录</button>
+        </div>
+      </div>
+      <div class="profile-col">
+        <h3>⭐ 收藏生词</h3>
+        ${favItems.length ? `<div class="fav-list">${favItems.map(f => `
+          <div class="fav-item" data-cat="${f.cat.id}">
+            <span class="fi-han">${f.w.han}</span>
+            <span class="fi-jp">${f.w.jp} · ${esc(f.w.mand)}</span>
+            <button class="fi-del" title="删除">✕</button>
+          </div>`).join('')}</div>` : '<div class="history-empty">还没有收藏，去词汇页点 ☆ 收藏吧</div>'}
+      </div>
+      <div class="profile-col" style="grid-column:1/-1">
+        <h3>📋 练习历史</h3>
+        ${p.practices.length ? p.practices.slice(0,12).map(h => `
+          <div class="history-item">
+            <span class="hi-ico">${h.ico}</span>
+            <span class="hi-what">${esc(h.label)}</span>
+            <span class="hi-time">${new Date(h.time).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+            <span class="hi-score">${h.score} 分</span>
+          </div>`).join('') : '<div class="history-empty">还没有练习记录，去语音页录一段试试吧</div>'}
+      </div>
+    </div>`;
+  /* 事件 */
+  $('#goalMinus').onclick = () => { p.goalCount = Math.max(1, p.goalCount-1); saveProgress(p); $('#goalVal').textContent = p.goalCount; };
+  $('#goalPlus').onclick = () => { p.goalCount = Math.min(100, p.goalCount+1); saveProgress(p); $('#goalVal').textContent = p.goalCount; };
+  $('#remindSwitch').onclick = async () => {
+    p.reminder = !p.reminder;
+    if(p.reminder){
+      if(!('Notification' in window)){ p.reminder = false; toast('浏览器不支持通知'); }
+      else {
+        const perm = await Notification.requestPermission();
+        if(perm !== 'granted'){ p.reminder = false; toast('未获得通知权限，可在浏览器设置开启'); }
+        else toast('提醒已开启 🔔');
+      }
+    } else toast('提醒已关闭');
+    saveProgress(p); renderProfile();
+  };
+  const c2 = $('#checkinBtn2'); if(c2) c2.onclick = checkin;
+  $('#logoutBtn').onclick = () => { currentUser = null; LS.set(SESSION_KEY, null); toast('已退出登录'); renderProfile(); renderHome(); };
+  $$('#profileBody .fav-item').forEach(el => {
+    el.querySelector('.fi-del').onclick = e => {
+      e.stopPropagation();
+      const cat = el.dataset.cat;
+      const han = el.querySelector('.fi-han').textContent;
+      const key = cat + ':' + han;
+      p.favorites = p.favorites.filter(k => k !== key);
+      saveProgress(p); renderProfile();
+    };
+    el.onclick = () => { vocabCat = el.dataset.cat; navigate('vocab'); };
+  });
+}
+let authMode = 'login';
+
+/* 练习历史记录 */
+function logPractice(ico, label, score){
+  const p = getProgress(); if(!p) return;
+  p.practices.unshift({ico, label, score, time: Date.now()});
+  p.practices = p.practices.slice(0, 60);
+  saveProgress(p);
+}
+
+/* ================= 每日提醒 ================= */
+function maybeRemind(){
+  if(!currentUser) return;
+  const p = getProgress(); if(!p || !p.reminder) return;
+  const today = todayKey();
+  if(p.reminderSentDate === today) return;
+  if(p.goalDate === today && p.goalToday >= p.goalCount) return; /* 已达标 */
+  if(!('Notification' in window)) return;
+  if(Notification.permission !== 'granted') return;
+  const n = new Notification('粵學堂 · 每日提醒', {
+    body: `今日目标 ${p.goalToday}/${p.goalCount} 个词汇，仲差少少，快啲嚟学啦！`,
+    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="18" fill="%23C8102E"/><text x="50" y="68" font-size="52" text-anchor="middle" fill="%23FFF" font-family="serif" font-weight="700">粤</text></svg>'
+  });
+  n.onclick = () => { window.focus(); n.close(); };
+  p.reminderSentDate = today;
+  saveProgress(p);
+}
+
+/* ================= 全局事件 ================= */
+function bindGlobal(){
+  /* 导航 */
+  $$('[data-nav]').forEach(el => el.addEventListener('click', () => navigate(el.dataset.nav)));
+  $('#dlgBack').onclick = () => { curDlg = null; renderDialogues(); };
+  /* 主题 */
+  const setTheme = t => {
+    document.documentElement.setAttribute('data-theme', t);
+    $('#themeToggle').textContent = t === 'dark' ? '☀️ 亮色模式' : '🌙 暗色模式';
+    $('#mThemeToggle').textContent = t === 'dark' ? '☀️' : '🌙';
+    LS.set('canto_theme', t);
+  };
+  $('#themeToggle').onclick = () => setTheme(document.documentElement.getAttribute('data-theme')==='dark' ? 'light' : 'dark');
+  $('#mThemeToggle').onclick = () => setTheme(document.documentElement.getAttribute('data-theme')==='dark' ? 'light' : 'dark');
+  const savedTheme = LS.get('canto_theme', null);
+  if(savedTheme) setTheme(savedTheme);
+  /* 语音页 */
+  $$('.ph-tab').forEach(b => b.onclick = () => {
+    if(b.dataset.phtab){ phTab = b.dataset.phtab; phSel = null; practiceTarget = null; $$('.ph-tab').forEach(x=>x.classList.remove('active')); b.classList.add('active'); renderPhGrid(); }
+  });
+  $$('[data-cul-tab]').forEach(b => b.onclick = () => {
+    culTab = b.dataset.culTab; $$('[data-cul-tab]').forEach(x=>x.classList.remove('active')); b.classList.add('active'); renderCulture();
+  });
+  $('#phSearch').addEventListener('input', renderPhGrid);
+  $('#phPlayAll').onclick = () => {
+    const q = ($('#phSearch').value||'').trim();
+    let items;
+    if(phTab==='initials') items = DATA.initials;
+    else if(phTab==='finals') items = DATA.finals;
+    else items = DATA.tones;
+    if(q) items = items.filter(i => (i.sym+(i.ex||'')).toLowerCase().includes(q.toLowerCase()));
+    if(!items.length) return;
+    speakPhItem({ex:items[0].ex, sym:items[0].sym});
+    items.forEach((it,i) => setTimeout(() => speakPhItem({ex:it.ex, sym:it.sym}, {queue:true}), i * 1500));
+    toast('正在朗读本组音标（' + items.length + ' 个）');
+  };
+  $('#phStopAll').onclick = stopSpeak;
+  /* 发音练习台 */
+  $('#ptDemo').onclick = () => { if(practiceTarget) speak(practiceTarget.text); else toast('先点选一张音标卡片'); };
+  $('#ptRecord').onclick = () => {
+    if(!practiceTarget){ toast('先点选一张音标卡片再录音'); return; }
+    if(recording) stopRecord();
+    else startRecord();
+  };
+  $('#ptPlayback').onclick = () => { if(audioEl && recordedUrl) audioEl.play(); };
+  /* 词汇页 */
+  $('#vocabSearch').addEventListener('input', renderVocabGrid);
+  $('#favFilter').onclick = () => { vocabFavOnly = !vocabFavOnly; $('#favFilter').classList.toggle('chip-red', vocabFavOnly); renderVocabGrid(); };
+  $('#favPlayAll').onclick = () => {
+    const cat = DATA.vocabCategories.find(c=>c.id===vocabCat);
+    cat.words.forEach((w,i) => setTimeout(() => speak(w.han, {queue:true}), i * 1400));
+    toast('正在朗读「' + cat.name + '」全部词汇');
+  };
+  $('#quizOpenBtn').onclick = openQuiz;
+  /* 打卡 */
+  $('#checkinBtn').onclick = checkin;
+}
+
+/* ================= PWA Service Worker 注册 ================= */
+function registerSW(){
+  if(!('serviceWorker' in navigator)) return;
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      console.info('[粵學堂] SW 已注册, scope:', reg.scope);
+    }).catch(err => {
+      console.warn('[粵學堂] SW 注册失败:', err.message);
+    });
+  });
+}
+
+/* ================= 唱粤语歌 ================= */
+let curSong = null, sgIdx = 0, sgLoop = false, sgAuto = false, sgAutoTimer = null;
+let sgAudio = null, sgFileUrl = null;
+let sgRecState = {rec:false, mr:null, chunks:[]};
+
+/* 逐字注音：把整句粤拼按音节逐个标到汉字正上方（ruby） */
+function annotateRuby(han, jp){
+  const syls = jp.trim().split(/\s+/);
+  let si = 0, out = '';
+  for(const ch of han){
+    if(ch === ' '){ out += ' '; }
+    else if(/[，。！？、；：,.!?;:·—…《》()（）“”‘’]/.test(ch)){ out += ch; }
+    else if(/[a-zA-Z0-9]/.test(ch)){ out += ch; }
+    else { out += '<ruby>' + ch + '<rt>' + (syls[si] || '') + '</rt></ruby>'; si++; }
+  }
+  return out;
+}
+
+function renderSing(){
+  $('#songCards').innerHTML = SONGS.map((s,i) => `
+    <div class="song-card" data-sid="${s.id}" style="background:linear-gradient(135deg,${s.colors[0]},${s.colors[1]});animation:pageIn .4s ${i*0.08}s backwards">
+      <span class="sc-emoji">${s.emoji}</span>
+      <span class="sc-dots"><i></i><i></i><i></i></span>
+      <h3>${s.title}</h3>
+      <div class="sc-meta">${s.artist} · ${s.year} · ${s.lyric.length} 句</div>
+      <div class="sc-tags">${s.tags.map(t=>`<span class="sc-tag">${t}</span>`).join('')}<span class="sc-tag">${s.level}</span></div>
+    </div>`).join('');
+  $$('#songCards .song-card').forEach(c => c.onclick = () => openSong(c.dataset.sid));
+  /* 歌词字词小词典 */
+  $('#swGrid').innerHTML = LYRIC_WORDS.map(w => `
+    <div class="sw-item" title="点击朗读">
+      <div class="sw-top"><span class="sw-char">${w.char}</span><span class="sw-jp">${w.jp}</span></div>
+      <div class="sw-mand">${w.mand}</div>
+      <div class="sw-ex">${w.ex}</div>
+    </div>`).join('');
+  $$('#swGrid .sw-item').forEach(el => el.onclick = () => speak(el.querySelector('.sw-char').textContent, {}));
+  $('#singStage').classList.add('hidden');
+}
+function openSong(id){
+  curSong = SONGS.find(s => s.id === id);
+  if(!curSong) return;
+  sgIdx = 0; sgLoop = false; sgAuto = false;
+  clearTimeout(sgAutoTimer);
+  logActivity(curSong.emoji, curSong.title, '进入学唱模式', 'sing');
+  $('#songCards').classList.add('hidden');
+  $('#singStage').classList.remove('hidden');
+  renderSong();
+}
+function renderSong(){
+  const s = curSong; if(!s) return;
+  $('#singHead').innerHTML = `
+    <span class="sh-emoji">${s.emoji}</span>
+    <div>
+      <h3>${s.title}</h3>
+      <div class="sh-meta">${s.artist} · ${s.year} · 难度：${s.level}</div>
+      <div class="sh-intro">${s.intro}</div>
+    </div>`;
+  $('#singHead').style.background = 'linear-gradient(135deg,' + s.colors[0] + ',' + s.colors[1] + ')';
+  $('#lyricPanel').innerHTML = s.lyric.map((l,i) => `
+    <div class="lyric-line ${i===sgIdx?'current':''}" data-i="${i}">
+      <span class="ll-no">${i+1}</span>
+      <div class="ll-body">
+        <div class="ll-han">${annotateRuby(l.han, l.jp)}</div>
+        <div class="ll-jp">${l.jp}</div>
+        <div class="ll-mand">${l.mand}</div>
+        <div class="ll-tools">
+          <button class="ll-btn" data-act="demo" data-i="${i}">🔊 示范</button>
+          <button class="ll-btn rec" data-act="rec" data-i="${i}">🎤 跟唱</button>
+        </div>
+      </div>
+      <span class="ll-badge">NOW ▶</span>
+    </div>`).join('');
+  $('#songNotes').innerHTML = `<div class="ga-block" style="margin:0 0 8px"><h4 style="margin-bottom:8px">发音难点</h4></div>` + s.notes.map(n => `
+    <div class="sn-item"><b>${n.target}</b> · <span>${n.tip}</span></div>`).join('');
+  $$('#lyricPanel .lyric-line').forEach(el => {
+    const i = +el.dataset.i;
+    el.onclick = () => gotoLine(i, true);
+    const demo = el.querySelector('[data-act=demo]');
+    if(demo) demo.onclick = e => { e.stopPropagation(); gotoLine(i, true); };
+    const rec = el.querySelector('[data-act=rec]');
+    if(rec) rec.onclick = e => { e.stopPropagation(); singRec(i, rec); };
+  });
+  updateSingStatus();
+  const cur = $('#lyricPanel .lyric-line.current');
+  if(cur) cur.scrollIntoView({behavior:'smooth', block:'center'});
+}
+function gotoLine(i, play){
+  if(!curSong) return;
+  sgIdx = Math.max(0, Math.min(curSong.lyric.length - 1, i));
+  renderSong();
+  if(play) speak(curSong.lyric[sgIdx].han);
+}
+function sgPrev(){ gotoLine(sgIdx - 1, true); }
+function sgNext(){ if(sgLoop){ gotoLine(sgIdx, true); toast('🔁 单句循环中：重练本句'); } else { gotoLine(sgIdx + 1, true); } }
+function sgAutoPlay(){
+  if(!curSong || !sgAuto) return;
+  const l = curSong.lyric[sgIdx];
+  speak(l.han);
+  updateSingStatus('⚡ 自动跟唱：示范第 ' + (sgIdx+1) + ' 句 → 轮到你唱 → 自动下一句');
+  clearTimeout(sgAutoTimer);
+  sgAutoTimer = setTimeout(() => {
+    if(!sgAuto || sgRecState.rec) return;
+    if(sgLoop || sgIdx >= curSong.lyric.length - 1){
+      if(sgIdx >= curSong.lyric.length - 1 && !sgLoop){ sgAuto = false; $('#sgAuto').classList.remove('active'); updateSingStatus('🎉 整首歌跟唱完啦！犀利！'); return; }
+      sgAutoPlay();
+    } else {
+      sgIdx++; renderSong(); sgAutoPlay();
+    }
+  }, l.d * 1000 * (0.75 / Math.max(0.5, speechRate)) + 1200); /* 等待时长随语速缩放 */
+}
+async function singRec(i, btn){
+  if(sgRecState.rec){
+    sgRecState.rec = false; sgRecState.mr && sgRecState.mr.stop();
+    btn.textContent = '🎤 跟唱'; btn.classList.remove('recording');
+    return;
+  }
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    const mr = new MediaRecorder(stream);
+    const ch = [];
+    mr.ondataavailable = e => ch.push(e.data);
+    mr.onstop = async () => {
+      const blob = new Blob(ch, {type:ch[0]?.type || 'audio/webm'});
+      const ana = await analyzeBlob(blob);
+      const l = curSong.lyric[i];
+      const res = evalRecord({text:l.han}, ana);
+      modalRoot.innerHTML = `<div class="modal-mask"><div class="modal"><h3>🎤 跟唱评估 <span class="chip chip-green" style="margin-left:auto">${curSong.title} · 第 ${i+1} 句</span></h3><div id="ptFeedback"></div><div style="text-align:center;margin-top:16px"><button class="btn btn-ghost sm" id="evalClose">关闭</button></div></div></div>`;
+      renderFeedback(res, {text:l.han, jp:l.jp}, $('#ptFeedback'));
+      $('#evalClose').onclick = () => { modalRoot.innerHTML = ''; };
+      logPractice('🎵', curSong.title + ' 第' + (i+1) + '句', finalScore(res, null));
+      stream.getTracks().forEach(t => t.stop());
+    };
+    sgRecState.mr = mr; sgRecState.rec = true;
+    mr.start();
+    btn.textContent = '⏹ 停止'; btn.classList.add('recording');
+    speak(curSong.lyric[i].han);
+    toast('先听示范，然后跟着唱这一句');
+  }catch(e){ toast('无法访问麦克风，请检查权限'); }
+}
+function fmtT(t){
+  if(!isFinite(t) || t == null) return '00:00';
+  const m = Math.floor(t/60), s = Math.floor(t%60);
+  return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+}
+/* 全文注音视图：整首歌词逐字注音，一排排通读 */
+function showFullLyric(){
+  if(!curSong) return;
+  const s = curSong;
+  modalRoot.innerHTML = `<div class="modal-mask" id="flMask"><div class="modal lyric-full-modal">
+    <h3>📄 ${s.title} <span class="chip chip-gold" style="font-size:11px">全文注音</span><button id="flClose" style="margin-left:auto;border:none;background:none;font-size:18px;color:var(--ink-3);cursor:pointer;padding:2px 6px" title="关闭">✕</button></h3>
+    <div class="lyric-full">
+      ${s.lyric.map((l,i) => `
+        <div class="lf-line" data-i="${i}">
+          <span class="lf-no">${i+1}</span>
+          <span class="lf-ruby">${annotateRuby(l.han, l.jp)}</span>
+          <span class="lf-mand">${esc(l.mand)}</span>
+        </div>`).join('')}
+    </div>
+    <p class="tip" style="text-align:center;margin-top:14px">点击任意句朗读 · 歌词仅供学习，版权归原作者所有</p>
+  </div></div>`;
+  $('#flClose').onclick = () => { modalRoot.innerHTML = ''; };
+  $('#flMask').addEventListener('click', e => { if(e.target.id === 'flMask') modalRoot.innerHTML = ''; });
+  $$('#modalRoot .lf-line').forEach(el => el.onclick = () => {
+    speak(s.lyric[+el.dataset.i].han);
+    $$('#modalRoot .lf-line').forEach(x => x.classList.remove('playing'));
+    el.classList.add('playing');
+  });
+}
+function updateSingStatus(txt){
+  const el = $('#singStatus');
+  if(!el) return;
+  if(txt) el.textContent = txt;
+  else if(curSong) el.textContent = '当前：第 ' + (sgIdx+1) + ' / ' + curSong.lyric.length + ' 句 · ' + curSong.lyric[sgIdx].mand;
+}
+function bindSing(){
+  $('#singBack').onclick = () => {
+    curSong = null; sgAuto = false; clearTimeout(sgAutoTimer);
+    $('#singStage').classList.add('hidden');
+    $('#songCards').classList.remove('hidden');
+  };
+  $('#sgPrev').onclick = sgPrev;
+  $('#sgNext').onclick = sgNext;
+  $('#sgDemo').onclick = () => { if(curSong) gotoLine(sgIdx, true); };
+  $('#sgRec').onclick = () => { if(curSong) singRec(sgIdx, $('#sgRec')); };
+  $('#sgLoop').onclick = () => {
+    sgLoop = !sgLoop;
+    $('#sgLoop').classList.toggle('active', sgLoop);
+    toast(sgLoop ? '🔁 单句循环已开启：反复练当前句' : '单句循环已关闭');
+  };
+  $('#sgAuto').onclick = () => {
+    sgAuto = !sgAuto;
+    $('#sgAuto').classList.toggle('active', sgAuto);
+    if(sgAuto){ updateSingStatus('⚡ 自动跟唱：示范 → 你唱 → 下一句'); sgAutoPlay(); }
+    else { clearTimeout(sgAutoTimer); updateSingStatus('已停止自动跟唱'); }
+  };
+  $('#sgFull').onclick = showFullLyric;
+  /* 朗读语速选择器（唱歌页 + 语音页，全局同步） */
+  ['sgRate','phRate'].forEach(id => {
+    const box = document.getElementById(id);
+    if(!box) return;
+    $$('button', box).forEach(b => {
+      b.onclick = () => {
+        speechRate = parseFloat(b.dataset.r);
+        LS.set('canto_speech_rate', speechRate);
+        updateRateUI();
+        toast('朗读语速：' + speechRate + '×');
+      };
+    });
+  });
+  updateRateUI();
+  function updateRateUI(){
+  ['sgRate','phRate'].forEach(id => {
+    const box = document.getElementById(id);
+    if(!box) return;
+    $$('button', box).forEach(b => b.classList.toggle('active', parseFloat(b.dataset.r) === speechRate));
+  });
+}
+
+/* ================= 整曲播放（唱歌页） ================= */
+  $('#spImport').onclick = () => $('#spFile').click();
+  $('#spFile').onchange = e => {
+    const f = e.target.files[0]; if(!f) return;
+    if(sgFileUrl) URL.revokeObjectURL(sgFileUrl);
+    sgFileUrl = URL.createObjectURL(f);
+    if(sgAudio) sgAudio.pause();
+    sgAudio = new Audio(sgFileUrl);
+    sgAudio.addEventListener('timeupdate', () => {
+      $('#spSeek').value = sgAudio.duration ? sgAudio.currentTime / sgAudio.duration * 100 : 0;
+      $('#spTime').textContent = fmtT(sgAudio.currentTime) + ' / ' + fmtT(sgAudio.duration);
+    });
+    sgAudio.addEventListener('ended', () => { $('#spPlay').textContent = '▶ 播放'; });
+    $('#spPlay').textContent = '▶ 播放';
+    $('#spTime').textContent = '00:00 / 00:00';
+    toast('已导入：' + f.name + '（仅本机播放，不上传）');
+  };
+  $('#spPlay').onclick = () => {
+    if(!sgAudio){ toast('先点「⬆️ 导入音频」选择本地歌曲文件'); return; }
+    if(sgAudio.paused){ sgAudio.play(); $('#spPlay').textContent = '⏸ 暂停'; }
+    else { sgAudio.pause(); $('#spPlay').textContent = '▶ 播放'; }
+  };
+  $('#spSeek').addEventListener('input', e => {
+    if(sgAudio && sgAudio.duration) sgAudio.currentTime = e.target.value / 100 * sgAudio.duration;
+  });
+  $('#spRate').onchange = e => { if(sgAudio) sgAudio.playbackRate = +e.target.value; };
+}
+
+/* ================= 启动 ================= */
+function init(){
+  bindGlobal();
+  bindSing();
+  registerSW();
+  const p = getProgress();
+  if(p){
+    const today = todayKey();
+    if(p.goalDate !== today){ p.goalDate = today; p.goalToday = 0; p.goalWords = []; saveProgress(p); }
+  }
+  navigate('home');
+  updateVoiceUI();
+  maybeRemind();
+  setTimeout(updateVoiceUI, 800);
+}
+document.addEventListener('DOMContentLoaded', init);
