@@ -136,6 +136,7 @@ if [ ! -d "$STATIC_RELEASE" ]; then
   STATIC_STAGE="$(mktemp -d "$STATIC_BASE/.stage.XXXXXX")"
   install -m 0644 "$SOURCE_DIR/index.html" "$SOURCE_DIR/sw.js" "$SOURCE_DIR/manifest.webmanifest" "$STATIC_STAGE/"
   cp -a "$SOURCE_DIR/css" "$SOURCE_DIR/js" "$SOURCE_DIR/icons" "$STATIC_STAGE/"
+  chmod 0755 "$STATIC_STAGE"
   mv "$STATIC_STAGE" "$STATIC_RELEASE"
   STATIC_STAGE=""
 fi
@@ -150,6 +151,7 @@ if [ "$SYNC_CHANGED" -eq 1 ]; then
   if [ ! -d "$SYNC_RELEASE" ]; then
     SYNC_STAGE="$(mktemp -d "$SYNC_BASE/.stage.XXXXXX")"
     install -m 0644 "$SOURCE_DIR/server/sync-server.mjs" "$SOURCE_DIR/server/sync-store.mjs" "$SOURCE_DIR/server/manage-user.mjs" "$SOURCE_DIR/server/package.json" "$SYNC_STAGE/"
+    chmod 0755 "$SYNC_STAGE"
     mv "$SYNC_STAGE" "$SYNC_RELEASE"
     SYNC_STAGE=""
   fi
@@ -166,6 +168,7 @@ if [ "$TTS_CHANGED" -eq 1 ]; then
     TTS_STAGE="$(mktemp -d "$TTS_BASE/.stage.XXXXXX")"
     install -m 0644 "$SOURCE_DIR/server/tts-proxy.mjs" "$SOURCE_DIR/server/package.json" "$SOURCE_DIR/server/package-lock.json" "$TTS_STAGE/"
     (cd "$TTS_STAGE" && "$NPM_BIN" ci --omit=dev --ignore-scripts --silent)
+    chmod 0755 "$TTS_STAGE"
     mv "$TTS_STAGE" "$TTS_RELEASE"
     TTS_STAGE=""
   fi
