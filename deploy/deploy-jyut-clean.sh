@@ -68,6 +68,7 @@ wait_health(){
 }
 
 rollback(){
+  local status=$?
   trap - ERR
   set +e
   echo "[$(date '+%F %T')] deploy failed; rolling back"
@@ -83,6 +84,8 @@ rollback(){
     systemctl restart jyut-tts
   fi
   cleanup
+  trap - EXIT
+  exit "$status"
 }
 trap rollback ERR
 trap cleanup EXIT
