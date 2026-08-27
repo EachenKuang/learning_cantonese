@@ -1,0 +1,87 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '正式版本号（例如 v0.1.0）'
+        required: true
+        type: string
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 校验版本并确定已验证提交
+        id: prepare
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if ! printf '%s' "$VERSION" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+            echo "版本号必须使用 vX.Y.Z 格式，例如 v0.1.0"
+            exit 1
+          fi
+
+          git fetch origin '+refs/tags/*:refs/tags/*'
+          approved_sha="$(git rev-parse refs/tags/ci-ok^{commit})"
+
+          tag_exists=false
+          if git show-ref --verify --quiet "refs/tags/$VERSION"; then
+            existing_sha="$(git rev-parse "refs/tags/$VERSION^{commit}")"
+            if [ "$existing_sha" != "$approved_sha" ]; then
+              echo "版本标签已经指向其他提交，不允许覆盖：$VERSION"
+              exit 1
+            fi
+            tag_exists=true
+          fi
+
+          latest="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | head -n 1)"
+          if [ -n "$latest" ] && [ "$(printf '%s\n%s\n' "$latest" "$VERSION" | sort -V | tail -n 1)" != "$VERSION" ]; then
+            echo "新版本必须高于现有最高版本 $latest：$VERSION"
+            exit 1
+          fi
+
+          echo "sha=$approved_sha" >> "$GITHUB_OUTPUT"
+          echo "tag_exists=$tag_exists" >> "$GITHUB_OUTPUT"
+          echo "将发布 $VERSION，对应已通过 CI 的提交 $approved_sha"
+
+      - name: 创建不可变版本标签
+        if: steps.prepare.outputs.tag_exists != 'true'
+        env:
+          VERSION: ${{ inputs.version }}
+          APPROVED_SHA: ${{ steps.prepare.outputs.sha }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag --annotate "$VERSION" "$APPROVED_SHA" --message "粵學堂 $VERSION"
+          git push origin "refs/tags/$VERSION"
+
+      - name: 创建 GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          APPROVED_SHA: ${{ steps.prepare.outputs.sha }}
+        run: |
+          if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "GitHub Release 已存在，无需重复创建：$VERSION"
+            exit 0
+          fi
+          gh release create "$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "粵學堂 $VERSION" \
+            --target "$APPROVED_SHA" \
+            --generate-notes \
+            --verify-tag
