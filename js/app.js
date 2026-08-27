@@ -275,6 +275,8 @@ function markStudyToday(){
 
 /* 全局朗读语速（TTS） */
 let speechRate = LS.get('canto_speech_rate', 0.75);
+/* 朗读排程代际：stopSpeak 递增使其失效（修复「全部朗读停不下来」） */
+let speakSeq = 0;
 
 /* ================= 语音（TTS）================= */
 const CLOUD_TTS_URL = '/api/tts';
@@ -437,6 +439,7 @@ function speak(text, opts={}){
 }
 function stopSpeak(){
   cloudGeneration++;
+  speakSeq++; /* 使所有已排程的 setTimeout 朗读失效 */
   cloudQueue = [];
   cloudPlaying = false;
   cloudAudio.pause();
@@ -1261,7 +1264,8 @@ function roleShow(){
   const d = curDlg;
   stopSpeak();
   const mine = d.lines.filter(l => l.speaker === dlgRole);
-  mine.forEach((l,idx) => setTimeout(() => speak(l.han, {queue:true}), idx * 1800));
+  const seq = ++speakSeq;
+  mine.forEach((l,idx) => setTimeout(() => { if(seq !== speakSeq) return; speak(l.han, {queue:true}); }, idx * 1800));
   $$('#dlgLines .dlg-line').forEach(el => el.classList.remove('hidden-line'));
   const p = getProgress();
   if(p && !p.dialogues.includes(d.id)){
@@ -1610,7 +1614,8 @@ function bindGlobal(){
     if(q) items = items.filter(i => (i.sym+(i.ex||'')).toLowerCase().includes(q.toLowerCase()));
     if(!items.length) return;
     speakPhItem({ex:items[0].ex, sym:items[0].sym});
-    items.forEach((it,i) => setTimeout(() => speakPhItem({ex:it.ex, sym:it.sym}, {queue:true}), i * 1500));
+    const seq = ++speakSeq;
+    items.forEach((it,i) => setTimeout(() => { if(seq !== speakSeq) return; speakPhItem({ex:it.ex, sym:it.sym}, {queue:true}); }, i * 1500));
     toast('正在朗读本组音标（' + items.length + ' 个）');
   };
   $('#phStopAll').onclick = stopSpeak;
@@ -1628,7 +1633,8 @@ function bindGlobal(){
   $('#reviewBtn').onclick = () => { vocabReviewOnly = !vocabReviewOnly; vocabFavOnly = false; $('#reviewBtn').classList.toggle('active', vocabReviewOnly); $('#reviewBtn').setAttribute('aria-pressed', vocabReviewOnly?'true':'false'); $('#favFilter').classList.remove('chip-red'); $('#favFilter').setAttribute('aria-pressed','false'); renderVocab(); updateReviewBtn(); };
   $('#favPlayAll').onclick = () => {
     const cat = DATA.vocabCategories.find(c=>c.id===vocabCat);
-    cat.words.forEach((w,i) => setTimeout(() => speak(w.han, {queue:true}), i * 1400));
+    const seq = ++speakSeq;
+    cat.words.forEach((w,i) => setTimeout(() => { if(seq !== speakSeq) return; speak(w.han, {queue:true}); }, i * 1400));
     toast('正在朗读「' + cat.name + '」全部词汇');
   };
   $('#quizOpenBtn').onclick = openQuiz;
