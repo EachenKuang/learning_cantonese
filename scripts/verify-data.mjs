@@ -32,6 +32,19 @@ function load(file) {
 
 const DATA = load(path.join(ROOT, 'js/data.js'));
 const SONGS = load(path.join(ROOT, 'js/songs.js'));
+const SW_SOURCE = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+const INDEX_SOURCE = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+
+/* ---- 0. 发布缓存版本 ---- */
+const cacheMatch = SW_SOURCE.match(/^const CACHE = 'canto-shell-v([0-9]+)';$/m);
+check(cacheMatch, '无法解析 Service Worker 缓存版本');
+if (cacheMatch) {
+  const cacheVersion = cacheMatch[1];
+  for (const asset of ['manifest.webmanifest', 'css/style.css', 'js/data.js', 'js/songs.js', 'js/app.js']) {
+    check(SW_SOURCE.includes(`${asset}?v=${cacheVersion}`), `sw.js 缓存版本不一致: ${asset}`);
+    check(INDEX_SOURCE.includes(`${asset}?v=${cacheVersion}`), `index.html 缓存版本不一致: ${asset}`);
+  }
+}
 
 /* ---- 1. 板块结构 ---- */
 const want = { initials: 19, finals: 55, tones: 9, vocabCategories: 11, dialogues: 9, grammar: 10 };
