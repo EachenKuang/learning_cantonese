@@ -277,6 +277,22 @@ vocabCategories: [
     {han:'作業', jp:'zok3 jip6', mand:'作业', ex:'今日作業多唔多？', exjp:'gam1 jat6 zok3 jip6 do1 m4 do1?', exmand:'今天作业多不多？'},
     {han:'放假', jp:'fong3 gaa3', mand:'放假', ex:'放暑假去旅行。', exjp:'fong3 syu3 gaa3 heoi3 leoi5 hang4.', exmand:'放暑假去旅行。'},
   ]},
+
+{
+  id:'fun', name:'休闲娱乐', icon:'🎮', words:[
+    {han:'睇戏', jp:'tai2 hei3', mand:'看电影', ex:'今晚去唔去睇戏？', exjp:'gam1 maan5 heoi3 m4 heoi3 tai2 hei3?', exmand:'今晚去不去看电影？'},
+    {han:'唱K', jp:'coeng3 kei1', mand:'唱K', ex:'我哋去唱K啦。', exjp:'ngo5 dei6 heoi3 coeng3 kei1 laa1.', exmand:'我们去唱K吧。'},
+    {han:'行山', jp:'haang4 saan1', mand:'爬山', ex:'星期日去行山。', exjp:'sing1 kei4 jat6 heoi3 haang4 saan1.', exmand:'星期天去爬山。'},
+    {han:'游水', jp:'jau4 seoi2', mand:'游泳', ex:'夏天好兴游水。', exjp:'haa6 tin1 hou2 hing1 jau4 seoi2.', exmand:'夏天流行游泳。'},
+    {han:'打机', jp:'daa2 gei1', mand:'打游戏', ex:'打机打到通宵。', exjp:'daa2 gei1 daa2 dou3 tung1 siu1.', exmand:'打游戏打通宵。'},
+    {han:'睇波', jp:'tai2 bo1', mand:'看球赛', ex:'今晚睇波睇到好夜。', exjp:'gam1 maan5 tai2 bo1 tai2 dou3 hou2 je6.', exmand:'今晚看球看到很晚。'},
+    {han:'影相', jp:'jing2 soeng2', mand:'拍照', ex:'同我影张相呀。', exjp:'tung4 ngo5 jing2 zoeng1 soeng2 aa3.', exmand:'帮我拍张照呀。'},
+    {han:'听歌', jp:'teng1 go1', mand:'听歌', ex:'我成日听歌。', exjp:'ngo5 seng4 jat6 teng1 go1.', exmand:'我经常听歌。'},
+    {han:'睇书', jp:'tai2 syu1', mand:'看书', ex:'得闲就睇书。', exjp:'dak1 haan4 zau6 tai2 syu1.', exmand:'有空就看书。'},
+    {han:'去旅行', jp:'heoi3 leoi5 hang4', mand:'去旅游', ex:'暑假去旅行。', exjp:'syu3 gaa3 heoi3 leoi5 hang4.', exmand:'暑假去旅游。'},
+    {han:'睇演唱会', jp:'tai2 jin2 coeng3 wui2', mand:'看演唱会', ex:'睇演唱会好激动。', exjp:'tai2 jin2 coeng3 wui2 hou2 gik1 dung6.', exmand:'看演唱会很激动。'},
+    {han:'钓鱼', jp:'diu3 jyu2', mand:'钓鱼', ex:'爷爷钟意钓鱼。', exjp:'je4 je4 zung1 ji3 diu3 jyu2.', exmand:'爷爷喜欢钓鱼。'},
+  ]},
 ],
 
 /* ---------- 3. 对话场景 ---------- */
@@ -339,6 +355,52 @@ dialogues: [
     {speaker:'病人', han:'兩日喇。', jp:'loeng5 jat6 laa3.', mand:'两天了。'},
     {speaker:'护士', han:'好，坐低等陣，醫生好快叫你。', jp:'hou2, co5 dai1 dang2 zan6, ji1 sang1 hou2 faai3 giu3 nei5.', mand:'好，坐下等会儿，医生很快叫你。'},
   ]},
+
+{
+  id:'airport', title:'機場過關', emoji:'✈️', level:'中级',
+  desc:'搭飞机出行，问路、赶时间、道别一次搞掂。',
+  tags:['交通','出行','问询'],
+  lines:[
+    {speaker:'乘客', han:'請問去機場嘅巴士喺邊度搭？', jp:'cing2 man6 heoi3 gei1 coeng4 ge3 baa1 si2 hai2 bin1 dou6 daap3?', mand:'请问去机场的巴士在哪里坐？'},
+    {speaker:'職員', han:'行前少少，五分鐘後有車。', jp:'haang4 cin4 siu2 siu2, ng5 fan1 zung1 hau6 jau5 ce1.', mand:'往前走一点，五分钟后有车。'},
+    {speaker:'乘客', han:'幾耐先到機場呀？', jp:'gei2 noi6 sin1 dou3 gei1 coeng4 aa3?', mand:'多久能到机场呀？'},
+    {speaker:'職員', han:'唔塞車就四十分鐘。', jp:'m4 sak1 ce1 zau6 sei3 sap6 fan1 zung1.', mand:'不堵车就四十分钟。'},
+    {speaker:'乘客', han:'我搭十點半嘅機，會唔會遲呀？', jp:'ngo5 daap3 sap6 dim2 bun3 ge3 gei1, wui5 m4 wui5 ci4 aa3?', mand:'我乘十点半的飞机，会晚吗？'},
+    {speaker:'職員', han:'依家先八點，實嚟得切。', jp:'ji1 gaa1 sin1 baat3 dim2, sat6 lai4 dak1 cit3.', mand:'现在才八点，一定来得及。'},
+    {speaker:'乘客', han:'唔該晒！', jp:'m4 goi1 saai3!', mand:'谢谢！'},
+    {speaker:'職員', han:'唔使客氣，旅途愉快。', jp:'m4 sai2 haak3 hei3, leoi5 tou4 jyu4 faai3.', mand:'不客气，旅途愉快。'},
+  ],
+},
+{
+  id:'rent', title:'睇樓租房', emoji:'🏠', level:'中级',
+  desc:'租屋必问：面积、租金、管理费，同业主倾价。',
+  tags:['生活','租房','讲价'],
+  lines:[
+    {speaker:'業主', han:'你好，睇樓呀？就係呢個單位。', jp:'nei5 hou2, tai2 lau2 aa3? zau6 hai6 ni1 go3 daan1 wai2.', mand:'你好，看房吗？就是这个单位。'},
+    {speaker:'租客', han:'你個單位幾多呎呀？', jp:'nei5 go3 daan1 wai2 gei2 do1 cek3 aa3?', mand:'你的单位多少平方呎呀？'},
+    {speaker:'業主', han:'四百呎，兩房一廳，夠住。', jp:'sei3 baak3 cek3, loeng5 fong2 jat1 teng1, gau3 zyu6.', mand:'四百呎，两房一厅，够住。'},
+    {speaker:'租客', han:'月租幾多？包唔包管理費？', jp:'jyut6 zou1 gei2 do1? baau1 m4 baau1 gun2 lei5 fai3?', mand:'月租多少？包不包管理费？'},
+    {speaker:'業主', han:'一萬八蚊，包管理費同水電。', jp:'jat1 maan6 baat3 man1, baau1 gun2 lei5 fai3 tung4 seoi2 din6.', mand:'一万八块，包管理费和水电。'},
+    {speaker:'租客', han:'有冇得平啲呀？', jp:'jau5 mou5 dak1 peng4 di1 aa3?', mand:'能便宜一点吗？'},
+    {speaker:'業主', han:'最多平五百，再平就蝕本。', jp:'zeoi3 do1 peng4 ng5 baak3, zoi3 peng4 zau6 sit6 bun2.', mand:'最多便宜五百，再便宜就亏本。'},
+    {speaker:'租客', han:'咁我返去諗吓先。', jp:'gam2 ngo5 faan1 heoi3 nam2 haa5 sin1.', mand:'那我回去想想再说。'},
+  ],
+},
+{
+  id:'karaoke', title:'唱K約局', emoji:'🎤', level:'初级',
+  desc:'约朋友唱K，订房、点歌、轮麦一条龙。',
+  tags:['娱乐','邀约','唱歌'],
+  lines:[
+    {speaker:'朋友A', han:'今晚去唔去唱K呀？', jp:'gam1 maan5 heoi3 m4 heoi3 coeng3 kei1 aa3?', mand:'今晚去不去唱K呀？'},
+    {speaker:'朋友B', han:'好呀，約多幾個friend一齊。', jp:'hou2 aa3, joek3 do1 gei2 go3 friend jat1 cai4.', mand:'好呀，多约几个朋友一起。'},
+    {speaker:'朋友A', han:'訂咗房未？我哋六個人。', jp:'deng6 zo2 fong2 mei6? ngo5 dei6 luk6 go3 jan4.', mand:'订了房没？我们六个人。'},
+    {speaker:'朋友B', han:'未呀，依家打去訂。', jp:'mei6 aa3, ji1 gaa1 daa2 heoi3 deng6.', mand:'还没，现在打去订。'},
+    {speaker:'朋友A', han:'唱粵語歌定國語歌多？', jp:'coeng3 jyut6 jyu5 go1 ding6 gwok3 jyu5 go1 do1?', mand:'唱粤语歌多还是国语歌多？'},
+    {speaker:'朋友B', han:'梗係粵語歌，練吓發音。', jp:'gang2 hai6 jyut6 jyu5 go1, lin6 haa5 faat3 jam1.', mand:'当然是粤语歌，练练发音。'},
+    {speaker:'朋友A', han:'我點咗《海闊天空》，到你唱。', jp:'ngo5 dim2 zo2 hoi2 fut3 tin1 hung1, dou3 nei5 coeng3.', mand:'我点了《海阔天空》，轮到你唱。'},
+    {speaker:'朋友B', han:'好嘢！嗌支可樂先。', jp:'hou2 je5! aai3 zi1 ho2 lok6 sin1.', mand:'好耶！先叫杯可乐。'},
+  ],
+},
 ],
 
 /* ---------- 4. 语法专栏 ---------- */

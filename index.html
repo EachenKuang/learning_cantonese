@@ -65,10 +65,10 @@
           <button class="btn btn-ghost" data-nav="vocab">📖 学场景词汇</button>
         </div>
         <div class="hero-stats">
-          <div><b id="statWords">0</b><span>词汇收录</span></div>
-          <div><b id="statDialogues">0</b><span>对话场景</span></div>
-          <div><b id="statArticles">0</b><span>语法专题</span></div>
-          <div><b id="statCulture">0</b><span>文化趣闻</span></div>
+          <div data-nav="vocab" title="去词汇页"><b id="statWords">0</b><span>词汇收录</span></div>
+          <div data-nav="dialogues" title="去对话页"><b id="statDialogues">0</b><span>对话场景</span></div>
+          <div data-nav="grammar" title="去语法页"><b id="statArticles">0</b><span>语法专题</span></div>
+          <div data-nav="culture" title="去文化页"><b id="statCulture">0</b><span>文化趣闻</span></div>
         </div>
       </div>
 
@@ -214,6 +214,15 @@
         </div>
       </div>
 
+      <div class="ph-toolbar">
+        <input class="search" id="songSearch" placeholder="搜索歌名或歌手，如 海阔天空 / Beyond…">
+        <div class="ph-tools">
+          <button class="btn btn-ghost sm active" id="songFilterAll">全部</button>
+          <button class="btn btn-ghost sm" data-sf="初级">初级</button>
+          <button class="btn btn-ghost sm" data-sf="中级">中级</button>
+          <button class="btn btn-ghost sm" data-sf="进阶">进阶</button>
+        </div>
+      </div>
       <div class="song-cards" id="songCards"></div>
 
       <div class="sing-stage hidden" id="singStage">

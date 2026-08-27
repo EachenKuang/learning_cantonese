@@ -857,6 +857,7 @@ function renderDlg(){
     <div class="dlg-mode-bar">
       <button class="ph-tab ${dlgMode==='follow'?'active':''}" id="modeFollow">📖 逐句跟读</button>
       <button class="ph-tab ${dlgMode==='role'?'active':''}" id="modeRole">🎭 角色扮演</button>
+      ${dlgMode==='follow' ? '<button class="btn btn-ghost sm" id="dlgPlayAll">▶ 整段朗读</button>' : ''}
       ${dlgMode==='role' ? `
         <span style="font-size:13px;color:var(--ink-2);margin-left:6px">扮演：</span>
         ${roles.map(r => `<button class="ph-tab ${dlgRole===r?'active':''}" data-role="${esc(r)}">${esc(r)}</button>`).join('')}
@@ -891,6 +892,7 @@ function renderDlg(){
   $('#modeFollow').onclick = () => { dlgMode='follow'; dlgRole=null; dlgRevealed=false; renderDlg(); };
   $('#modeRole').onclick = () => { dlgMode='role'; dlgRole=roles[0]; dlgRevealed=false; renderDlg(); };
   $$('[data-role]').forEach(b => b.onclick = () => { dlgRole = b.dataset.role; dlgRevealed=false; renderDlg(); });
+  const dlpa = $('#dlgPlayAll'); if(dlpa) dlpa.onclick = () => { if(curDlg) curDlg.lines.forEach(l => speak(l.han, {queue:true})); };
   const rs = $('#roleStart'); if(rs) rs.onclick = roleStart;
   const rsh = $('#roleShow'); if(rsh) rsh.onclick = roleShow;
   const rrst = $('#roleReset'); if(rrst) rrst.onclick = () => { dlgRevealed=false; renderDlg(); };
@@ -1026,6 +1028,8 @@ function renderGrammarArticle(){
 let culTab = 'sayings';
 function renderCulture(){
   const d = DATA.culture;
+  const tabNames = {sayings:'粤语俗语', xiehou:'歇后语', life:'港式文化', festival:'节庆习俗', food:'港式小食', tvb:'TVB金句'};
+  Object.keys(tabNames).forEach(k => { const b = document.querySelector(`[data-cul-tab="${k}"]`); if(b && d[k]) b.textContent = tabNames[k] + ' ' + d[k].length; });
   const conf = {
     sayings:{arr:d.sayings, badge:'俗语', life:false, play:it=>it.han},
     xiehou:{arr:d.xiehou, badge:'歇后语', life:false, play:it=>it.front + '——' + it.back},
@@ -1331,6 +1335,7 @@ function registerSW(){
 
 /* ================= 唱粤语歌 ================= */
 let curSong = null, sgIdx = 0, sgLoop = false, sgAuto = false, sgAutoTimer = null;
+let songFilter = 'all', songQuery = '';
 let sgAudio = null, sgFileUrl = null;
 let sgRecState = {rec:false, mr:null, chunks:[]};
 
@@ -1348,7 +1353,8 @@ function annotateRuby(han, jp){
 }
 
 function renderSing(){
-  $('#songCards').innerHTML = SONGS.map((s,i) => `
+  const list = SONGS.filter(s => (songFilter==='all' || s.level===songFilter) && (!songQuery || (s.title + s.artist).toLowerCase().includes(songQuery)));
+  $('#songCards').innerHTML = list.map((s,i) => `
     <button class="song-card" data-sid="${s.id}" style="background:linear-gradient(135deg,${s.colors[0]},${s.colors[1]});animation:pageIn .4s ${i*0.08}s backwards">
       <span class="sc-emoji">${s.emoji}</span>
       <span class="sc-dots"><i></i><i></i><i></i></span>
@@ -1559,6 +1565,15 @@ function bindSing(){
 
 
 /* ================= 整曲播放（唱歌页） ================= */
+  const songInput = $('#songSearch');
+  if(songInput) songInput.oninput = e => { songQuery = e.target.value.trim().toLowerCase(); renderSing(); };
+  const sfAll = $('#songFilterAll');
+  if(sfAll) sfAll.onclick = () => { songFilter='all'; updateSongFilterUI(); renderSing(); };
+  $('[data-sf]').forEach(b => b.onclick = () => { songFilter = b.dataset.sf; updateSongFilterUI(); renderSing(); });
+  function updateSongFilterUI(){
+    const a = $('#songFilterAll'); if(a) a.classList.toggle('active', songFilter==='all');
+    $('[data-sf]').forEach(b => b.classList.toggle('active', b.dataset.sf===songFilter));
+  }
   $('#spImport').onclick = () => $('#spFile').click();
   $('#spFile').onchange = e => {
     const f = e.target.files[0]; if(!f) return;
