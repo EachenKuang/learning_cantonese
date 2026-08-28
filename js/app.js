@@ -143,7 +143,18 @@ function normalizeProgress(raw){
         });
       }
       return rv;
-    })()
+    })(),
+    lessonProgress:(() => {
+      const rp = {};
+      if(raw.lessonProgress && typeof raw.lessonProgress === 'object'){
+        Object.entries(raw.lessonProgress).slice(0,100).forEach(([k,v]) => {
+          if(typeof k !== 'string' || !k) return;
+          rp[k] = { step: Math.max(0, Math.min(50, Number(v?.step)||0)), done: !!v?.done };
+        });
+      }
+      return rp;
+    })(),
+    stories:cleanStringList(raw.stories, 50)
   };
 }
 function migrateLegacyProgress(){
@@ -780,14 +791,18 @@ function renderHome(){
     const acts = (p.activities||[]).slice(0,3);
     const dueN = reviewDueCount();
     const reviewEntry = dueN > 0 ? `<div class="cont-review" id="reviewEntry"><span>📅</span><b>待复习 ${dueN} 个词</b><span style="margin-left:auto">去复习 →</span></div>` : '';
-    const re = $('#reviewEntry');
-    if(re) re.onclick = () => { vocabReviewOnly = true; navigate('vocab'); };
-    $('#continueList').innerHTML = reviewEntry + (acts.length ? acts.map(a => `
+    /* 主题课「继续学习」入口 */
+    const curLesson = LESSONS.find(L => !lessonState(L.id).done) || LESSONS[0];
+    const ls = lessonState(curLesson.id);
+    const lessonEntry = `<div class="cont-review lesson-card" id="lessonEntry"><span>${curLesson.emoji}</span><b>${ls.done ? '再学一课：' : '继续学习：'}${curLesson.title}</b><span style="margin-left:auto;font-size:12px;color:var(--ink-3)">第 ${Math.min(ls.step+1, curLesson.steps.length)}/${curLesson.steps.length} 步 · ${curLesson.minutes} 分钟</span><span style="margin-left:8px">→</span></div>`;
+    $('#continueList').innerHTML = lessonEntry + reviewEntry + (acts.length ? acts.map(a => `
       <button type="button" class="cont-item" data-nav="${a.route}">
         <span class="ci-ico">${esc(a.icon)}</span>
         <div><div class="ci-title">${esc(a.title)}</div><div class="ci-sub">${esc(a.sub)}</div></div>
         <span class="ci-arrow">→</span>
       </button>`).join('') : `<div class="history-empty" style="border:none;padding:14px">还没有学习记录，先从发音或场景词汇开始吧～</div>`);
+    const le = $('#lessonEntry'); if(le) le.onclick = () => openLesson(curLesson.id);
+    const re = $('#reviewEntry'); if(re) re.onclick = () => { vocabReviewOnly = true; navigate('vocab'); };
     $$('#continueList .cont-item').forEach(el => el.onclick = () => navigate(el.dataset.nav));
   }
   /* 模块入口 */
@@ -841,6 +856,13 @@ function checkin(){
 let phTab = 'initials', phSel = null;
 
 /* ================= 声调听辨训练 ================= */
+/* 声调易错组合记录：{ '正确调|误选调': 次数 }，出题优先练错得多的组合 */
+function toneMistGet(){
+  try{ return JSON.parse(localStorage.getItem('canto_tone_mistakes') || '{}'); }catch(_){ return {}; }
+}
+function toneMistSave(m){
+  try{ localStorage.setItem('canto_tone_mistakes', JSON.stringify(m)); }catch(_){}
+}
 let td = {on:false, i:0, correct:0, streak:0, best:0, total:10, answer:null, opts:[]};
 function renderToneDrill(){
   const body = $('#tdBody'), stat = $('#tdStat');
@@ -854,8 +876,12 @@ function renderToneDrill(){
   }
   if(td.i >= td.total){
     const pct = Math.round(td.correct / td.total * 100);
+    const m = toneMistGet();
+    const topMist = Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 3)
+      .map(([k, n]) => { const [a, b] = k.split('|'); return a + ' / ' + b; }).join(' · ');
     body.innerHTML = '<div class="td-done"><b>' + (pct >= 80 ? '🏆 犀利！' : pct >= 60 ? '👍 唔错！' : '💪 继续努力！') + '</b>' +
       '<p>答对 ' + td.correct + ' / ' + td.total + ' 题 · 最高连击 ' + td.best + '</p>' +
+      (topMist ? '<p style="color:var(--ink-3);font-size:12.5px">常混淆：' + topMist + '（下次优先练）</p>' : '') +
       '<button type="button" class="btn btn-primary" id="tdRestart">🔄 再来一轮</button></div>';
     const rt = $('#tdRestart'); if(rt) rt.onclick = () => { td = {on:true, i:0, correct:0, streak:0, best:0, total:10, answer:null, opts:[]}; tdNext(); };
     if(stat) stat.textContent = '完成 ' + pct + '%';
@@ -863,7 +889,16 @@ function renderToneDrill(){
   }
   const all = DATA.tones;
   const ans = all[Math.floor(Math.random() * all.length)];
-  const others = all.filter(t => t.num !== ans.num).sort(() => Math.random() - 0.5).slice(0, 3);
+  /* 易错优先：常与 ans 混淆的调值进候选 */
+  const mist = toneMistGet();
+  const related = all.filter(t => t.num !== ans.num)
+    .map(t => ({ t, w: (mist[ans.num + '|' + t.num] || 0) + (mist[t.num + '|' + ans.num] || 0) }))
+    .sort((a, b) => b.w - a.w);
+  const others = related.filter(x => x.w > 0).slice(0, 3).map(x => x.t);
+  while(others.length < 3){
+    const t = all[Math.floor(Math.random() * all.length)];
+    if(t.num !== ans.num && !others.includes(t)) others.push(t);
+  }
   const opts = [...others, ans].sort(() => Math.random() - 0.5);
   td.answer = ans; td.opts = opts;
   body.innerHTML = '<div class="td-q">第 ' + (td.i + 1) + ' / ' + td.total + ' 题</div>' +
@@ -879,8 +914,18 @@ function tdPick(btn){
   const ok = btn.dataset.num === td.answer.num;
   const fb = $('#tdFb');
   const label = td.answer.num + ' ' + td.answer.name + ' ' + td.answer.contour + '（' + td.answer.ex + '）';
-  if(ok){ td.correct++; td.streak++; td.best = Math.max(td.best, td.streak); if(fb) fb.innerHTML = '<span class="td-ok">✅ 啱！' + label + '</span>'; }
-  else { td.streak = 0; if(fb) fb.innerHTML = '<span class="td-no">❌ 唔啱！正确答案是 ' + label + '</span>'; }
+  if(ok){
+    td.correct++; td.streak++; td.best = Math.max(td.best, td.streak);
+    if(fb) fb.innerHTML = '<span class="td-ok">✅ 啱！' + label + '</span>';
+  } else {
+    td.streak = 0;
+    /* 记录易错组合：正确调 vs 误选调 */
+    const m = toneMistGet();
+    const key = td.answer.num + '|' + btn.dataset.num;
+    m[key] = (m[key] || 0) + 1;
+    toneMistSave(m);
+    if(fb) fb.innerHTML = '<span class="td-no">❌ 唔啱！正确答案是 ' + label + '</span>';
+  }
   $$('#tdBody .td-opt').forEach(x => x.disabled = true);
   td.i++;
   setTimeout(() => { td.i >= td.total ? renderToneDrill() : tdNext(); }, 1100);
@@ -1004,7 +1049,7 @@ function renderVocabGrid(){
         <div class="wx-jp">${w.exjp}</div>
         <div class="wx-mand">${esc(w.exmand)}</div>
       </div>
-      <div class="wc-bottom"><span class="wc-cat">${cat.icon} ${cat.name}</span></div>
+      <div class="wc-bottom"><span class="wc-cat">${cat.icon} ${cat.name}</span><a class="wc-words" href="https://words.hk/?search=${encodeURIComponent(w.han)}&lang=zh" target="_blank" rel="noopener noreferrer" title="在粵典查询 ${esc(w.han)} 的详细释义">查粵典 ↗</a></div>
       <button type="button" class="wc-play" title="听发音">▶</button>
     </div>`;
   }).join('') || '<div class="history-empty" style="grid-column:1/-1">没有匹配的词汇</div>';
@@ -1221,6 +1266,299 @@ function d5Finish(){
     '<div style="display:flex;justify-content:flex-end"><button type="button" class="btn btn-primary" id="d5Done">完成</button></div>');
   $('#d5Done').onclick = () => { closeModal(); renderVocab(); };
 }
+/* ================= 主题课（学习路径主线） ================= */
+function lessonState(id){
+  const p = getProgress();
+  return (p.lessonProgress && p.lessonProgress[id]) || {step:0, done:false};
+}
+function saveLessonState(id, st){
+  const p = getProgress();
+  p.lessonProgress = p.lessonProgress || {};
+  p.lessonProgress[id] = st;
+  saveProgress(p);
+}
+function openLesson(id){
+  const L = LESSONS.find(x => x.id === id);
+  if(!L) return;
+  renderLessonStep(L, lessonState(id));
+}
+function renderLessonStep(L, st){
+  if(st.done){
+    openModal('<h3>' + L.emoji + ' ' + esc(L.title) + ' <span class="chip chip-green" style="margin-left:auto">已学完</span></h3>' +
+      '<div style="text-align:center;padding:18px 0">' +
+        '<div style="font-size:42px">🏆</div>' +
+        '<p style="margin-top:10px;color:var(--ink-2)">已完成「' + esc(L.title) + '」全部 ' + L.steps.length + ' 步！</p>' +
+        '<p style="color:var(--ink-3);font-size:13px;margin-top:6px">生词已加入复习计划，明天开始按遗忘曲线提醒</p>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+        '<button type="button" class="btn btn-ghost" id="lsRelearn">↻ 再学一遍</button>' +
+        '<button type="button" class="btn btn-primary" id="lsClose">完成</button>' +
+      '</div>');
+    $('#lsRelearn').onclick = () => { saveLessonState(L.id, {step:0, done:false}); closeModal(); renderLessonStep(L, {step:0, done:false}); };
+    $('#lsClose').onclick = () => { closeModal(); renderHome(); };
+    return;
+  }
+  const step = L.steps[st.step];
+  const head = '<h3>' + L.emoji + ' ' + esc(L.title) + ' <span class="chip chip-gold" style="margin-left:auto">' + (st.step+1) + ' / ' + L.steps.length + ' · ' + esc(step.title) + '</span></h3>';
+  const foot = '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">' +
+    (st.step > 0 ? '<button type="button" class="btn btn-ghost" id="lsPrev">← 上一步</button>' : '') +
+    '<button type="button" class="btn btn-primary" id="lsNext">' + (st.step >= L.steps.length-1 ? '完成课程 →' : '下一步 →') + '</button>' +
+    '</div>';
+  const advance = () => { st.step++; saveLessonState(L.id, st); renderLessonStep(L, st); };
+  const back = () => { st.step = Math.max(0, st.step-1); saveLessonState(L.id, st); renderLessonStep(L, st); };
+
+  if(step.type === 'tones'){
+    let gi = 0, score = 0;
+    const renderTone = () => {
+      if(gi >= step.pairs.length){ advance(); return; }
+      const pair = step.pairs[gi];
+      openModal(head +
+        '<div style="text-align:center;padding:14px 0 6px">' +
+          '<div style="font-weight:700;color:var(--ink-2)">' + esc(pair.ask) + '</div>' +
+          '<div style="display:flex;gap:12px;justify-content:center;margin-top:14px">' +
+            '<button type="button" class="btn btn-ghost" id="ltA">🔊 ' + esc(pair.a.han) + ' <span style="opacity:.7">' + pair.a.jp + '</span></button>' +
+            '<button type="button" class="btn btn-ghost" id="ltB">🔊 ' + esc(pair.b.han) + ' <span style="opacity:.7">' + pair.b.jp + '</span></button>' +
+          '</div>' +
+          '<div class="td-fb" id="ltFb" style="margin-top:12px"></div>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;justify-content:center;margin-top:6px">' +
+          '<button type="button" class="quiz-opt" id="ltPickA" style="grid-column:auto">选「' + esc(pair.a.han) + '」</button>' +
+          '<button type="button" class="quiz-opt" id="ltPickB" style="grid-column:auto">选「' + esc(pair.b.han) + '」</button>' +
+        '</div>');
+      $('#ltA').onclick = () => speak(pair.a.han);
+      $('#ltB').onclick = () => speak(pair.b.han);
+      const pick = isA => {
+        const ok = (pair.ans === 'a') === isA;
+        $('#ltFb').textContent = ok ? '✅ 啱晒！' + (pair.ans==='a'?pair.a.han+' = '+pair.a.jp:pair.b.han+' = '+pair.b.jp) : '再听一次，听清楚声调先';
+        $('#ltFb').className = 'td-fb ' + (ok ? 'td-ok' : 'td-no');
+        $('#ltPickA').disabled = true; $('#ltPickB').disabled = true;
+        if(ok){
+          score++;
+          setTimeout(() => { gi++; renderTone(); }, 900);
+        }
+      };
+      $('#ltPickA').onclick = () => pick(true);
+      $('#ltPickB').onclick = () => pick(false);
+    };
+    renderTone();
+    return;
+  }
+  if(step.type === 'vocab'){
+    let vi = 0;
+    const renderVocab = () => {
+      if(vi >= step.words.length){ advance(); return; }
+      const cat = DATA.vocabCategories.find(c => c.id === step.catId);
+      const w = cat.words.find(x => x.han === step.words[vi]);
+      if(!w){ vi++; renderVocab(); return; }
+      openModal(head +
+        '<div style="text-align:center;padding:18px 0 6px">' +
+          '<div style="font-size:36px;font-weight:900;color:var(--red)">' + esc(w.han) + '</div>' +
+          '<div style="color:var(--ink-2);margin-top:6px;font-size:15px">' + w.jp + '</div>' +
+          '<div style="color:var(--ink-3);font-size:13px;margin-top:6px">' + esc(w.mand) + '</div>' +
+          '<button type="button" class="btn btn-primary sm" id="lvPlay" style="margin-top:14px">🔊 听发音</button>' +
+        '</div>' +
+        '<div style="display:flex;justify-content:flex-end;margin-top:12px">' +
+          '<button type="button" class="btn btn-primary" id="lvNext">' + (vi === step.words.length-1 ? '去对话 →' : '下一个') + '</button>' +
+        '</div>');
+      $('#lvPlay').onclick = () => speak(w.han);
+      $('#lvNext').onclick = () => { vi++; renderVocab(); };
+    };
+    renderVocab();
+    return;
+  }
+  if(step.type === 'dialogue'){
+    const d = DATA.dialogues.find(x => x.id === step.dlgId);
+    openModal(head +
+      '<div style="max-height:48vh;overflow-y:auto;margin-top:10px">' +
+        d.lines.map((l,i) =>
+          '<div class="dlg-line" style="display:flex;gap:10px;padding:8px 6px;border-bottom:1px dashed var(--line)">' +
+            '<span style="flex:none;color:var(--ink-3);font-size:12px">' + (i+1) + '</span>' +
+            '<div style="flex:1;min-width:0">' +
+              '<div style="font-size:12px;color:var(--ink-3)">' + esc(l.speaker) + '</div>' +
+              '<div style="font-weight:700" lang="yue-Hant-HK">' + esc(l.han) + '</div>' +
+              '<div style="color:var(--ink-3);font-size:12.5px">' + l.jp + '</div>' +
+              '<div style="color:var(--ink-3);font-size:12px">' + esc(l.mand) + '</div>' +
+            '</div>' +
+            '<button type="button" class="dl-btn" data-di="' + i + '" style="flex:none;align-self:center">🔊</button>' +
+          '</div>').join('') +
+      '</div>' +
+      '<div style="display:flex;gap:8px;justify-content:space-between;margin-top:12px;align-items:center">' +
+        '<button type="button" class="btn btn-ghost sm" id="ldPlayAll">▶ 整段朗读</button>' +
+        '<span style="color:var(--ink-3);font-size:12px">' + d.lines.length + ' 句 · 跟读练嘴型</span>' +
+      '</div>' + foot);
+    $$('#modalRoot [data-di]').forEach(b => b.onclick = () => speak(d.lines[+b.dataset.di].han));
+    const pa = $('#ldPlayAll'); if(pa) pa.onclick = () => { if(guardBtn(pa)) d.lines.forEach(l => speak(l.han, {queue:true})); };
+    $('#lsNext').onclick = advance;
+    const pv = $('#lsPrev'); if(pv) pv.onclick = back;
+    return;
+  }
+  if(step.type === 'grammar'){
+    const g = DATA.grammar.find(x => x.id === step.artId);
+    openModal(head +
+      '<div style="margin-top:10px">' +
+        '<div style="font-weight:800;font-size:15px">' + esc(g.title) + '</div>' +
+        '<p style="color:var(--ink-2);font-size:13.5px;line-height:1.8;margin-top:8px">' + esc(g.intro) + '</p>' +
+        '<div style="margin-top:10px">' +
+          (g.examples || []).slice(0,3).map(e =>
+            '<div style="padding:8px 10px;border-radius:10px;background:var(--paper);margin-top:6px">' +
+              '<div lang="yue-Hant-HK" style="font-weight:700">' + esc(e.han) + '</div>' +
+              '<div style="color:var(--ink-3);font-size:12.5px">' + e.jp + ' · ' + esc(e.mand) + '</div>' +
+            '</div>').join('') +
+        '</div>' +
+      '</div>' + foot);
+    $('#lsNext').onclick = advance;
+    const pv = $('#lsPrev'); if(pv) pv.onclick = back;
+    return;
+  }
+  if(step.type === 'culture'){
+    const c = DATA.culture.life.find(x => x.title === step.lifeTitle) || DATA.culture.life[0];
+    openModal(head +
+      '<div style="margin-top:12px">' +
+        '<div style="font-size:20px;font-weight:900;color:var(--red)">' + esc(c.title) + '</div>' +
+        '<div style="color:var(--ink-3);font-size:12.5px;margin-top:4px">' + esc(c.tag) + '</div>' +
+        '<p style="color:var(--ink-2);font-size:13.5px;line-height:1.9;margin-top:10px">' + esc(c.desc) + '</p>' +
+        '<div style="background:var(--gold-soft);border:1px dashed var(--gold);border-radius:12px;padding:12px 14px;margin-top:12px;font-size:13.5px;line-height:1.8;color:var(--ink-2)">📖 ' + esc(c.story) + '</div>' +
+      '</div>' + foot);
+    $('#lsNext').onclick = advance;
+    const pv = $('#lsPrev'); if(pv) pv.onclick = back;
+    return;
+  }
+  if(step.type === 'quiz'){
+    let qi = 0, score = 0;
+    const renderQ = () => {
+      if(qi >= step.questions.length){ finishLesson(L, st); return; }
+      const q = step.questions[qi];
+      openModal(head +
+        '<div style="font-weight:700;color:var(--ink-2);margin:12px 0 14px">' + (qi+1) + '. ' + esc(q.q) + '</div>' +
+        q.opts.map((o,i) => '<button type="button" class="quiz-opt" data-qo="' + i + '">' + (i+1) + '. ' + esc(o) + '</button>').join('') +
+        '<div class="quiz-progress">答对 ' + score + ' / ' + qi + ' 题</div>');
+      $$('#modalRoot .quiz-opt').forEach(b => b.onclick = () => {
+        const picked = +b.dataset.qo;
+        $$('#modalRoot .quiz-opt').forEach(x => { x.disabled = true; if(+x.dataset.qo === q.ans) x.classList.add('correct'); else if(x === b) x.classList.add('wrong'); });
+        if(picked === q.ans) score++;
+        toast(picked === q.ans ? '答啱咗 👍' : '正确答案：' + q.opts[q.ans]);
+        setTimeout(() => { qi++; renderQ(); }, 1200);
+      });
+    };
+    renderQ();
+    return;
+  }
+  advance();
+}
+function finishLesson(L, st){
+  /* 生词自动加入复习计划 */
+  const vocabStep = L.steps.find(s => s.type === 'vocab');
+  if(vocabStep){
+    const cat = DATA.vocabCategories.find(c => c.id === vocabStep.catId);
+    vocabStep.words.forEach(han => {
+      const w = cat && cat.words.find(x => x.han === han);
+      if(w) markWordLearned(cat.id, w);
+    });
+  }
+  st.done = true; saveLessonState(L.id, st);
+  logActivity(L.emoji, L.title, '完成主题课「' + L.title + '」', 'home');
+  openModal('<h3>' + L.emoji + ' ' + esc(L.title) + ' 完成 🎉</h3>' +
+    '<div style="text-align:center;padding:16px 0">' +
+      '<div style="font-size:44px">🏆</div>' +
+      '<p style="color:var(--ink-2);margin-top:10px">完成了全部 ' + L.steps.length + ' 步！</p>' +
+      '<p style="color:var(--ink-3);font-size:13px;margin-top:6px">' + (vocabStep ? '「' + vocabStep.words.join('、') + '」已加入复习计划' : '') + '</p>' +
+      '<p style="color:var(--ink-3);font-size:12.5px;margin-top:4px">明天开始按遗忘曲线提醒你</p>' +
+    '</div>' +
+    '<div style="display:flex;justify-content:flex-end"><button type="button" class="btn btn-primary" id="lfClose">完成</button></div>');
+  $('#lfClose').onclick = () => { closeModal(); renderHome(); };
+}
+
+
+/* ================= 分级阅读（原创短文） ================= */
+function openStory(id){
+  const st = STORIES.find(x => x.id === id);
+  if(!st) return;
+  renderStory(st);
+}
+function renderStory(st){
+  openModal('<h3>📖 ' + esc(st.title) + ' <span class="chip chip-gold" style="margin-left:auto">' + esc(st.level) + ' · ' + st.words + ' 字 · ' + st.minutes + ' 分钟</span></h3>' +
+    '<p class="tip" style="margin:8px 0 4px">' + esc(st.intro) + '</p>' +
+    '<div style="max-height:46vh;overflow-y:auto;margin-top:8px">' +
+      st.lines.map((l, i) =>
+        '<div class="st-line" data-si="' + i + '" style="padding:9px 10px;border-bottom:1px dashed var(--line);border-radius:8px;cursor:pointer;transition:background .2s">' +
+          '<div style="display:flex;align-items:center;gap:8px">' +
+            '<span style="flex:none;color:var(--ink-3);font-size:11px">' + (i+1) + '</span>' +
+            '<span lang="yue-Hant-HK" style="font-weight:700;font-size:15.5px;flex:1">' + esc(l.han) + '</span>' +
+            '<span style="flex:none;color:var(--red);font-size:12px">🔊</span>' +
+          '</div>' +
+          '<div style="color:var(--ink-3);font-size:12.5px;margin-top:2px;padding-left:19px">' + l.jp + '</div>' +
+          '<div class="st-mand" data-mi="' + i + '" style="color:var(--ink-3);font-size:12px;padding-left:19px;display:none">' + esc(l.mand) + '</div>' +
+        '</div>').join('') +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:space-between;margin-top:12px;align-items:center">' +
+      '<button type="button" class="btn btn-ghost sm" id="stPlayAll">▶ 播放全文</button>' +
+      '<button type="button" class="btn btn-ghost sm" id="stToggles">🔤 释义</button>' +
+      '<button type="button" class="btn btn-primary sm" id="stQuiz">📝 理解题</button>' +
+    '</div>' +
+    '<div style="display:flex;justify-content:flex-end;margin-top:10px">' +
+      '<button type="button" class="btn btn-ghost" id="stClose">关闭</button>' +
+    '</div>');
+  /* 点击句子播放 + 高亮 */
+  $$('#modalRoot .st-line').forEach(el => el.onclick = () => {
+    const i = +el.dataset.si;
+    speak(st.lines[i].han);
+    $$('#modalRoot .st-line').forEach(x => x.style.background = '');
+    el.style.background = 'var(--red-soft)';
+  });
+  const pa = $('#stPlayAll'); if(pa) pa.onclick = () => { if(guardBtn(pa)) st.lines.forEach(l => speak(l.han, {queue:true})); };
+  const tg = $('#stToggles'); if(tg) tg.onclick = () => {
+    const on = $$('#modalRoot .st-mand').every(x => x.style.display === 'none');
+    $$('#modalRoot .st-mand').forEach(x => x.style.display = on ? 'block' : 'none');
+    tg.textContent = on ? '🔤 收起释义' : '🔤 释义';
+  };
+  const qz = $('#stQuiz'); if(qz) qz.onclick = () => storyQuiz(st);
+  const cl = $('#stClose'); if(cl) cl.onclick = closeModal;
+}
+function storyQuiz(st){
+  let qi = 0, score = 0;
+  const renderQ = () => {
+    if(qi >= st.quiz.length){ storyDone(st); return; }
+    const q = st.quiz[qi];
+    openModal('<h3>📝 理解题 <span class="chip chip-gold" style="margin-left:auto">' + esc(st.title) + ' · ' + (qi+1) + ' / ' + st.quiz.length + '</span></h3>' +
+      '<div style="font-weight:700;color:var(--ink-2);margin:12px 0 14px">' + (qi+1) + '. ' + esc(q.q) + '</div>' +
+      q.opts.map((o, i) => '<button type="button" class="quiz-opt" data-so="' + i + '">' + (i+1) + '. ' + esc(o) + '</button>').join('') +
+      '<div class="quiz-progress">答对 ' + score + ' / ' + qi + ' 题</div>');
+    $$('#modalRoot .quiz-opt').forEach(b => b.onclick = () => {
+      const picked = +b.dataset.so;
+      $$('#modalRoot .quiz-opt').forEach(x => { x.disabled = true; if(+x.dataset.so === q.ans) x.classList.add('correct'); else if(x === b) x.classList.add('wrong'); });
+      if(picked === q.ans) score++;
+      toast(picked === q.ans ? '答啱咗 👍' : '正确答案：' + q.opts[q.ans]);
+      setTimeout(() => { qi++; renderQ(); }, 1200);
+    });
+  };
+  renderQ();
+}
+function storyDone(st){
+  /* 生词入复习（只处理词库中存在的词） */
+  const learned = [];
+  st.newWords.forEach(han => {
+    for(const cat of DATA.vocabCategories){
+      const w = cat.words.find(x => x.han === han);
+      if(w){ markWordLearned(cat.id, w); learned.push(han); break; }
+    }
+  });
+  const p = getProgress();
+  if(p && !p.stories) p.stories = [];
+  if(!p.stories.includes(st.id)){ p.stories.push(st.id); saveProgress(p); }
+  openModal('<h3>📖 ' + esc(st.title) + ' 完成 🎉</h3>' +
+    '<div style="text-align:center;padding:14px 0">' +
+      '<div style="font-size:40px">📚</div>' +
+      '<p style="color:var(--ink-2);margin-top:8px">已读完这篇' + esc(st.level) + '短文</p>' +
+      (learned.length ? '<p style="color:var(--ink-3);font-size:13px;margin-top:6px">生词「' + learned.join('、') + '」已加入复习计划</p>' : '') +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+      '<button type="button" class="btn btn-ghost" id="sdAgain">↻ 再读一遍</button>' +
+      '<button type="button" class="btn btn-primary" id="sdClose">完成</button>' +
+    '</div>');
+  $('#sdAgain').onclick = () => { closeModal(); renderStory(st); };
+  $('#sdClose').onclick = () => { closeModal(); renderDialogues(); };
+}
+
 let quizVoiceWarned = false;
 function openQuiz(){
   /* 无可用语音时先引导（听力小测依赖发音），检测完成且全部不可用时弹一次 */
@@ -1331,7 +1669,15 @@ function renderDialogues(){
   $('#dlgDetail').classList.add('hidden');
   $('#dlgCards').classList.remove('hidden');
   const p = getProgress();
-  $('#dlgCards').innerHTML = DATA.dialogues.map(d => {
+  const storyCards = (STORIES || []).map((st, i) => `
+    <button type="button" class="dlg-card story-card" data-sid="${st.id}" style="animation:pageIn .4s ${i*0.05}s backwards">
+      <span class="dc-emoji">📖</span>
+      <h3>${esc(st.title)}</h3>
+      <p>${esc(st.intro)}</p>
+      <div class="dc-lines">${st.words} 字 · ${st.minutes} 分钟 · 理解题 ${st.quiz.length} 道</div>
+      <div class="dc-tags"><span class="dc-tag">${esc(st.level)}</span><span class="dc-tag">分级阅读</span></div>
+    </button>`).join('');
+  $('#dlgCards').innerHTML = storyCards + DATA.dialogues.map(d => {
     const done = p && p.dialogues.includes(d.id);
     return `
     <button type="button" class="dlg-card" data-id="${d.id}" style="animation:pageIn .4s ${DATA.dialogues.indexOf(d)*0.05}s backwards">
@@ -1346,7 +1692,8 @@ function renderDialogues(){
       ${done ? '<div class="dc-progress" style="width:100%"></div>' : ''}
     </button>`;
   }).join('');
-  $$('#dlgCards .dlg-card').forEach(c => c.onclick = () => openDlg(c.dataset.id));
+  $$('#dlgCards .story-card').forEach(c => c.onclick = () => openStory(c.dataset.sid));
+  $$('#dlgCards .dlg-card:not(.story-card)').forEach(c => c.onclick = () => openDlg(c.dataset.id));
 }
 function openDlg(id){
   curDlg = DATA.dialogues.find(d => d.id === id);
