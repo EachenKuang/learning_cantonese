@@ -279,12 +279,24 @@ let speechRate = LS.get('canto_speech_rate', 0.75);
 let speakSeq = 0;
 
 /* ================= 语音（TTS）================= */
-const CLOUD_TTS_URL = '/api/tts';
-const CLOUD_TTS_HEALTH_URL = '/api/tts/health';
+let CLOUD_TTS_URL = LS.get('canto_cloud_tts_url', '/api/tts');
+let CLOUD_TTS_HEALTH_URL = CLOUD_TTS_URL.replace(/\/+$/,'') + '/health';
+function updateCloudUrls(){
+  CLOUD_TTS_URL = LS.get('canto_cloud_tts_url', '/api/tts');
+  CLOUD_TTS_HEALTH_URL = CLOUD_TTS_URL.replace(/\/+$/,'') + '/health';
+}
 const cloudAudio = new Audio();
 let localYueVoice = null;
 let cloudTTS = {checked:false, ready:false, name:'晓佳（zh-HK-HiuGaaiNeural）'};
 let voiceInfo = {status:'detecting', name:''};
+let voiceUnavailAt = 0;
+/* 语音不可用提示：8 秒节流一次，避免听力小测每题都弹 */
+function notifyVoiceUnavailable(){
+  const now = Date.now();
+  if(now - voiceUnavailAt < 8000) return;
+  voiceUnavailAt = now;
+  toast('🔇 粤语语音暂不可用：设备无粤语语音包或云端未连接，可展开「🔧 语音诊断」处理');
+}
 
 function refreshVoices(){
   if(!('speechSynthesis' in window)){ localYueVoice = null; updateVoiceState(); return; }
@@ -342,22 +354,45 @@ function renderVoiceDiag(){
   const cloudLine = `<div class="diag-line ${cloudTTS.ready?'diag-yue':''}">
     <span class="diag-dot ${cloudTTS.ready?'diag-cur':''}"></span>
     ☁️ 云端粤语 · ${esc(cloudTTS.name)} · ${cloudTTS.ready?'当前可用':'暂不可用'}
+    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <input id="cloudUrlInput" value="${esc(CLOUD_TTS_URL)}" placeholder="/api/tts" aria-label="云端 TTS 地址" style="flex:1;min-width:150px;padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--paper);color:var(--ink);font-size:12px">
+      <button type="button" class="btn btn-ghost sm" id="cloudUrlSave">保存地址</button>
+      <button type="button" class="btn btn-ghost sm" id="voiceRetry">🔄 重新检测</button>
+    </div>
   </div>`;
-  if(!('speechSynthesis' in window)){ box.innerHTML = cloudLine + '<p class="diag-line">当前浏览器不支持设备语音，仍可使用云端粤语。</p>'; return; }
-  const vs = speechSynthesis.getVoices();
-  const zh = vs.filter(v => /zh|yue/i.test((v.lang||'') + ' ' + (v.name||'')));
-  if(!zh.length){
-    box.innerHTML = cloudLine + '<p class="diag-line">设备上没有本地粤语语音；联网时使用云端粤语。</p>';
-    return;
+  let list;
+  if(!('speechSynthesis' in window)){
+    list = '<p class="diag-line">当前浏览器不支持设备语音，仍可使用云端粤语。</p>';
+  } else {
+    const vs = speechSynthesis.getVoices();
+    const zh = vs.filter(v => /zh|yue/i.test((v.lang||'') + ' ' + (v.name||'')));
+    if(!zh.length) list = '<p class="diag-line">设备上没有本地粤语语音；联网时使用云端粤语。</p>';
+    else list = zh.map(v => {
+      const isYue = /^(zh[-_]?hk|zh[-_]?mo|yue)/i.test(v.lang||'') || /粤|cantonese|hong.?kong|香港/i.test((v.name||'')+' '+(v.lang||''));
+      const isCur = !cloudTTS.ready && localYueVoice === v;
+      return `<div class="diag-line ${isYue?'diag-yue':''}">
+        <span class="diag-dot ${isCur?'diag-cur':''}"></span>
+        ${isYue?'🇭🇰 设备粤语':'🗣 非粤语（不用于教学）'} · ${v.name} · <code>${v.lang}</code>${isCur?' ← 离线兜底':''}
+      </div>`;
+    }).join('');
   }
-  box.innerHTML = cloudLine + zh.map(v => {
-    const isYue = /^(zh[-_]?hk|zh[-_]?mo|yue)/i.test(v.lang||'') || /粤|cantonese|hong.?kong|香港/i.test((v.name||'')+' '+(v.lang||''));
-    const isCur = !cloudTTS.ready && localYueVoice === v;
-    return `<div class="diag-line ${isYue?'diag-yue':''}">
-      <span class="diag-dot ${isCur?'diag-cur':''}"></span>
-      ${isYue?'🇭🇰 设备粤语':'🗣 非粤语（不用于教学）'} · ${v.name} · <code>${v.lang}</code>${isCur?' ← 离线兜底':''}
-    </div>`;
-  }).join('');
+  box.innerHTML = cloudLine + list;
+  /* 保存云端地址 / 重新检测 */
+  const save = $('#cloudUrlSave');
+  if(save) save.onclick = () => {
+    const v = ($('#cloudUrlInput').value || '').trim();
+    if(!v){ toast('请输入云端 TTS 地址'); return; }
+    LS.set('canto_cloud_tts_url', v);
+    updateCloudUrls();
+    toast('云端地址已保存，重新检测中…');
+    checkCloudTTS();
+  };
+  const retry = $('#voiceRetry');
+  if(retry) retry.onclick = () => {
+    refreshVoices();
+    checkCloudTTS();
+    toast('正在重新检测设备与云端语音…');
+  };
 }
 /* 只保留汉字用于朗读（去掉括号备注等） */
 function cleanForSpeech(t){
@@ -401,7 +436,7 @@ function playNextCloud(){
     if(settled || generation !== cloudGeneration) return;
     settled = true;
     cloudPlaying = false;
-    if(!speakLocal(item.text, item.opts)) toast('粤语语音暂不可用，请稍后重试');
+    if(!speakLocal(item.text, item.opts)) notifyVoiceUnavailable();
     playNextCloud();
   };
   cloudAudio.onended = finish;
@@ -435,7 +470,7 @@ function speak(text, opts={}){
     playNextCloud();
     return;
   }
-  if(!speakLocal(cleaned, opts)) toast('粤语语音暂不可用，请检查网络或安装设备粤语语音包');
+  if(!speakLocal(cleaned, opts)) notifyVoiceUnavailable();
 }
 function stopSpeak(){
   cloudGeneration++;
@@ -1030,7 +1065,25 @@ const MINIMAL_PAIRS = [
   {group:[{han:'包',jp:'baau1'},{han:'飽',jp:'baau2'},{han:'豹',jp:'baau3'}], mand:'包/饱/豹'},
   {group:[{han:'色',jp:'sik1'},{han:'錫',jp:'sik3'},{han:'食',jp:'sik6'}], mand:'色/锡/食（入声）'},
 ];
+let quizVoiceWarned = false;
 function openQuiz(){
+  /* 无可用语音时先引导（听力小测依赖发音），检测完成且全部不可用时弹一次 */
+  if(!cloudTTS.ready && !localYueVoice && cloudTTS.checked && !quizVoiceWarned){
+    quizVoiceWarned = true;
+    openModal('<h3>🔇 未检测到粤语语音</h3>' +
+      '<p style="color:var(--ink-2);line-height:1.7;margin:10px 0 4px">听力小测需要播放粤语发音。当前设备没有粤语语音包，云端粤语也未连接（地址：<code>' + esc(CLOUD_TTS_URL) + '</code>）。</p>' +
+      '<p style="color:var(--ink-3);font-size:12.5px;line-height:1.7">安卓可安装「粤语（香港）」语音包；或在「🔧 语音诊断」中配置云端 TTS 地址后点重新检测。</p>' +
+      '<div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">' +
+        '<button type="button" class="btn btn-ghost" id="qvSkip">仍然进入</button>' +
+        '<button type="button" class="btn btn-primary" id="qvDiag">🔧 语音诊断</button>' +
+      '</div>');
+    $('#qvDiag').onclick = () => { closeModal(); navigate('phonetics'); requestAnimationFrame(() => { const sm = document.querySelector('.voice-diag summary'); if(sm){ sm.closest('details').open = true; sm.scrollIntoView({behavior:'smooth'}); } }); };
+    $('#qvSkip').onclick = () => { closeModal(); doOpenQuiz(); };
+    return;
+  }
+  doOpenQuiz();
+}
+function doOpenQuiz(){
   const p = getProgress();
   const all = DATA.vocabCategories.flatMap(c => c.words.map(w => ({...w, cat:c.name})));
   /* 混合题型：4 听词选义 + 3 最小对立 + 3 声调听辨 */
