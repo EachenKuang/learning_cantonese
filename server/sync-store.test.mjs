@@ -1,8 +1,8 @@
-/* 云端同步回归测试：sanitizeProfile 保留 reviews + mergeReviews 多设备按词合并
+/* 云端同步回归测试：sanitizeProfile 保留 reviews/lessonProgress/stories + 多设备按条目合并
    运行：node --test server/sync-store.test.mjs（Node 18+ 内置 test runner） */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sanitizeProfile, mergeReviews } from './sync-store.mjs';
+import { sanitizeProfile, mergeReviews, mergeLessonProgress, mergeStories } from './sync-store.mjs';
 
 /* ---- 1. sanitizeProfile 必须保留合法的 reviews ---- */
 test('sanitizeProfile 保留合法 reviews（box/due/updatedAt 规范化）', () => {
@@ -62,4 +62,53 @@ test('PUT 流程：服务端已有 reviews 时按词合并而非整包覆盖', (
   const merged = mergeReviews(serverStored.reviews, deviceSubmit.reviews);
   assert.equal(merged['food:飲茶'].box, 4, '服务端较新的 box=4 应保留，不被旧设备覆盖');
   assert.equal(merged['food:飲茶'].due, '2026-09-20');
+});
+
+/* ---- 4. 主题课进度与已读故事必须参与同步（否则跨设备无法续学） ---- */
+test('sanitizeProfile 保留 lessonProgress 与 stories', () => {
+  const p = sanitizeProfile({
+    lessonProgress: {
+      'tea-house': { step: 3, done: false },
+      'bad-key!':   { step: 1, done: false },   // 非法 id → 丢弃
+      '':           { step: 1, done: false }    // 空 key → 丢弃
+    },
+    stories: ['first-dimsum', 'first-dimsum', 123]
+  });
+  assert.deepEqual(p.lessonProgress['tea-house'], { step: 3, done: false }, '课程进度必须返回给客户端');
+  assert.equal(Object.keys(p.lessonProgress).length, 1, '非法课程 id 应被清洗');
+  assert.deepEqual(p.stories, ['first-dimsum'], '已读故事去重并过滤非字符串');
+});
+
+test('sanitizeProfile 缺省时返回空结构（不返回 undefined）', () => {
+  const p = sanitizeProfile({});
+  assert.deepEqual(p.lessonProgress, {});
+  assert.deepEqual(p.stories, []);
+});
+
+/* ---- 5. mergeLessonProgress：进度较后者胜，已完成不被打回 ---- */
+test('mergeLessonProgress 旧设备不能把已完成的课打回未完成', () => {
+  const base = { 'tea-house': { step: 7, done: true } };
+  const incoming = { 'tea-house': { step: 2, done: false } };
+  assert.deepEqual(mergeLessonProgress(base, incoming)['tea-house'], { step: 7, done: true });
+});
+
+test('mergeLessonProgress 同未完成状态下取 step 较大者', () => {
+  const base = { 'tea-house': { step: 2, done: false } };
+  const incoming = { 'tea-house': { step: 5, done: false } };
+  assert.deepEqual(mergeLessonProgress(base, incoming)['tea-house'], { step: 5, done: false });
+});
+
+test('mergeLessonProgress 两设备课程取并集', () => {
+  const base = { 'tea-house': { step: 1, done: false } };
+  const incoming = { 'bus': { step: 4, done: true } };
+  const out = mergeLessonProgress(base, incoming);
+  assert.ok(out['tea-house'] && out['bus'], '两设备的课都要保留');
+});
+
+/* ---- 6. mergeStories：已读故事取并集 ---- */
+test('mergeStories 取并集且去重', () => {
+  const out = mergeStories(['first-dimsum'], ['first-dimsum', 'market']);
+  assert.deepEqual(out.slice().sort(), ['first-dimsum', 'market']);
+  assert.deepEqual(mergeStories(null, ['a']), ['a']);
+  assert.deepEqual(mergeStories(['a'], null), ['a']);
 });

@@ -104,6 +104,18 @@ export function sanitizeProfile(raw){
       };
     });
   }
+  /* 主题课进度：{ lessonId: {step, done} } —— 跨设备续学依赖它 */
+  const lessonProgress = {};
+  if(raw?.lessonProgress && typeof raw.lessonProgress === 'object'){
+    Object.entries(raw.lessonProgress).slice(0,100).forEach(([key, value])=>{
+      /* 课程 id 是 slug（如 tea-house），非法 key 直接丢弃，避免脏数据占位 */
+      if(typeof key !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(key)) return;
+      lessonProgress[key] = {
+        step: Math.max(0, Math.min(50, Number(value?.step) || 0)),
+        done: !!value?.done
+      };
+    });
+  }
   return {
     favorites:strList(raw?.favorites), learned:strList(raw?.learned), practices,
     quiz:Array.isArray(raw?.quiz) ? raw.quiz.slice(0,100) : [], dialogues:strList(raw?.dialogues,100),
@@ -114,6 +126,7 @@ export function sanitizeProfile(raw){
     goalToday:Math.max(0,Math.min(100,Number(raw?.goalToday)||0)), goalWords:strList(raw?.goalWords,100),
     reminder:!!raw?.reminder, reminderSentDate:typeof raw?.reminderSentDate==='string'?raw.reminderSentDate:null,
     reviews, activities, lastStudyDate:typeof raw?.lastStudyDate==='string'?raw.lastStudyDate:null,
+    lessonProgress, stories:strList(raw?.stories, 50),
     modifiedAt:Math.max(0,Number(raw?.modifiedAt)||0)
   };
 }
@@ -129,4 +142,27 @@ export function mergeReviews(base = {}, incoming = {}){
     if(!current || (Number(value.updatedAt) || 0) >= (Number(current.updatedAt) || 0)) out[key] = value;
   }
   return out;
+}
+
+/* 按课合并主题课进度：同 lessonId 取进度较后者（防旧设备把已完成的课打回第 1 步） */
+export function mergeLessonProgress(base = {}, incoming = {}){
+  if(!base || typeof base !== 'object') base = {};
+  if(!incoming || typeof incoming !== 'object') return base;
+  const out = { ...base };
+  for(const [key, value] of Object.entries(incoming)){
+    if(typeof key !== 'string' || !key || !value || typeof value !== 'object') continue;
+    const current = out[key];
+    if(!current){ out[key] = value; continue; }
+    const inDone = !!value.done, curDone = !!current.done;
+    if(inDone !== curDone) out[key] = inDone ? value : current;   /* 已完成优先保留 */
+    else out[key] = (Number(value.step) || 0) >= (Number(current.step) || 0) ? value : current;
+  }
+  return out;
+}
+
+/* 已读故事取并集（读完就是读完，不应被另一台设备抹掉） */
+export function mergeStories(base = [], incoming = []){
+  const merged = new Set([...(Array.isArray(base) ? base : []), ...(Array.isArray(incoming) ? incoming : [])]
+    .filter(x => typeof x === 'string' && x));
+  return [...merged].slice(0, 50);
 }

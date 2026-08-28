@@ -1,7 +1,7 @@
 /** 粵學堂 · 轻量邀请制云端学习档案 */
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
-import { initStore, reloadStore, getState, mutate, normalizeUserId, hashPassword, verifyPassword, tokenHash, newSessionToken, sanitizeProfile, mergeReviews } from './sync-store.mjs';
+import { initStore, reloadStore, getState, mutate, normalizeUserId, hashPassword, verifyPassword, tokenHash, newSessionToken, sanitizeProfile, mergeReviews, mergeLessonProgress, mergeStories } from './sync-store.mjs';
 
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = Number(process.env.PORT || 8788);
@@ -85,6 +85,16 @@ const server=createServer(async(req,res)=>{
       const existing = current.data?.reviews;
       if(existing && Object.keys(existing).length > 0 && profile.reviews){
         profile.reviews = mergeReviews(existing, profile.reviews);
+      }
+      /* 主题课进度按课合并：同 lessonId 取进度较后者，避免旧设备把已完成的课打回第 1 步 */
+      const existingLessons = current.data?.lessonProgress;
+      if(existingLessons && Object.keys(existingLessons).length > 0 && profile.lessonProgress){
+        profile.lessonProgress = mergeLessonProgress(existingLessons, profile.lessonProgress);
+      }
+      /* 已读故事取并集 */
+      const existingStories = current.data?.stories;
+      if(Array.isArray(existingStories) && existingStories.length && Array.isArray(profile.stories)){
+        profile.stories = mergeStories(existingStories, profile.stories);
       }
       await mutate(store=>{ const record=store.users[auth.user.id]; record.profile={version:current.version+1,updatedAt,data:profile}; });
       return sendJson(res,200,profileResponse(getState().users[auth.user.id]));

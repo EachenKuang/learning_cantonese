@@ -136,10 +136,16 @@ function normalizeProgress(raw){
     modifiedAt:Math.max(0, Number(raw.modifiedAt)||0),
     reviews:(() => {
       const rv = {};
+      const todayKey = new Date().toISOString().slice(0,10);
       if(raw.reviews && typeof raw.reviews === 'object'){
         Object.entries(raw.reviews).slice(0,1000).forEach(([k,v]) => {
           if(typeof k !== 'string' || !k) return;
-          rv[k] = { box: Math.max(0, Math.min(5, Number(v?.box)||1)), due: typeof v?.due === 'string' ? v.due : new Date().toISOString().slice(0,10) };
+          /* updatedAt 是多设备合并的裁决依据，必须保留，否则服务端永远收到 0，退化成「后提交者覆盖」 */
+          rv[k] = {
+            box: Math.max(0, Math.min(5, Number(v?.box)||1)),
+            due: (typeof v?.due === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v.due)) ? v.due : todayKey,
+            updatedAt: Math.max(0, Number(v?.updatedAt) || 0)
+          };
         });
       }
       return rv;
@@ -190,6 +196,10 @@ function mergeFirstCloud(localRaw, remoteRaw){
   out.checkins = {...remote.checkins,...local.checkins};
   out.practices = mergeUnique([...local.practices,...remote.practices], x=>`${x.time}|${x.label}|${x.score}`, 60);
   out.activities = mergeUnique([...local.activities,...remote.activities], x=>`${x.time}|${x.title}|${x.route}`, 6);
+  /* 首次合并同样要按条目累积，不能整包取 newer */
+  out.reviews = mergeReviews3(local.reviews, remote.reviews);
+  out.lessonProgress = mergeLesson3(local.lessonProgress, remote.lessonProgress);
+  out.stories = mergeStories3(local.stories, remote.stories);
   out.streak = Math.max(local.streak,remote.streak);
   out.modifiedAt = Math.max(local.modifiedAt,remote.modifiedAt);
   return normalizeProgress(out);
@@ -200,6 +210,31 @@ function mergeSet3(base,local,remote){
   for(const item of b){ if(!l.has(item)||!r.has(item)) out.delete(item); }
   return [...out];
 }
+/* 逐项状态合并：整包覆盖会让旧设备把新进度打回去，必须按条目裁决 */
+function mergeReviews3(local,remote){
+  const out={...(remote||{})};
+  for(const [k,v] of Object.entries(local||{})){
+    if(!v||typeof v!=='object') continue;
+    const cur=out[k];
+    if(!cur||(Number(v.updatedAt)||0)>=(Number(cur.updatedAt)||0)) out[k]=v;
+  }
+  return out;
+}
+function mergeLesson3(local,remote){
+  const out={...(remote||{})};
+  for(const [k,v] of Object.entries(local||{})){
+    if(!v||typeof v!=='object') continue;
+    const cur=out[k];
+    if(!cur){ out[k]=v; continue; }
+    const inDone=!!v.done, curDone=!!cur.done;
+    if(inDone!==curDone) out[k]=inDone?v:cur;          /* 已完成优先保留 */
+    else out[k]=(Number(v.step)||0)>=(Number(cur.step)||0)?v:cur;
+  }
+  return out;
+}
+function mergeStories3(local,remote){
+  return [...new Set([...(remote||[]),...(local||[])])].slice(0,50);
+}
 function mergeCloud3(baseRaw, localRaw, remoteRaw){
   const base=normalizeProgress(baseRaw), local=normalizeProgress(localRaw), remote=normalizeProgress(remoteRaw);
   const out={...local};
@@ -207,6 +242,10 @@ function mergeCloud3(baseRaw, localRaw, remoteRaw){
   const setKeys=new Set(['favorites','learned','dialogues','goalWords']);
   const appendKeys=new Set(['practices','activities']);
   for(const key of Object.keys(base)){
+    /* 这三类是按条目累积的状态，永远合并、永不整包覆盖 */
+    if(key==='reviews'){ out[key]=mergeReviews3(local[key],remote[key]); continue; }
+    if(key==='lessonProgress'){ out[key]=mergeLesson3(local[key],remote[key]); continue; }
+    if(key==='stories'){ out[key]=mergeStories3(local[key],remote[key]); continue; }
     if(same(local[key],base[key])) out[key]=remote[key];
     else if(same(remote[key],base[key])||same(local[key],remote[key])) out[key]=local[key];
     else if(setKeys.has(key)) out[key]=mergeSet3(base[key],local[key],remote[key]);
@@ -864,26 +903,67 @@ function toneMistSave(m){
   try{ localStorage.setItem('canto_tone_mistakes', JSON.stringify(m)); }catch(_){}
 }
 /* ================= 粤拼拼写练习（听音写拼 / 看字写拼） ================= */
-let jd = {on:false, i:0, correct:0, streak:0, best:0, total:10, answer:null, mode:'audio'};
+let jd = {on:false, i:0, correct:0, streak:0, best:0, total:10, answer:null, mode:'audio', difficulty:'easy'};
+const JP_INITIALS = ['ng','gw','kw','b','p','m','f','d','t','n','l','g','k','h','w','z','c','s','j'];
+function parseJyutping(jp){
+  const s = String(jp).trim().toLowerCase();
+  const toneMatch = s.match(/[1-6]$/);
+  const tone = toneMatch ? s.slice(-1) : '';
+  const noTone = tone ? s.slice(0, -1) : s;
+  let initial = '', final = noTone;
+  for (const ini of JP_INITIALS){
+    if (noTone.startsWith(ini)){ initial = ini; final = noTone.slice(ini.length); break; }
+  }
+  return {initial, final, tone, noTone, full: s};
+}
 function jpDrillPool(){
   const pool = [];
-  DATA.initials.forEach(x => { if(x.ex && x.exjp) pool.push({han:x.ex, jp:x.exjp}); });
-  DATA.finals.forEach(x => { if(x.ex && x.exjp) pool.push({han:x.ex, jp:x.exjp}); });
-  DATA.tones.forEach(x => { if(x.ex && x.exjp) pool.push({han:x.ex, jp:x.exjp}); });
+  DATA.initials.forEach(x => { if(x.ex && x.exjp) pool.push({han:x.ex, jp:x.exjp, type:'initial', sym:x.sym}); });
+  DATA.finals.forEach(x => { if(x.ex && x.exjp) pool.push({han:x.ex, jp:x.exjp, type:'final', sym:x.sym}); });
+  DATA.tones.forEach(x => { if(x.ex && x.exjp) pool.push({han:x.ex, jp:x.exjp, type:'tone', sym:x.num}); });
   return pool;
+}
+function jpBuildQuestion(difficulty){
+  const pool = jpDrillPool();
+  const item = pool[Math.floor(Math.random() * pool.length)];
+  const p = parseJyutping(item.jp);
+  let part = 'full', answer = p.full, displayJp = null, prompt = '完整粤拼', placeholder = '如 baa1';
+  if (difficulty === 'easy'){
+    const parts = [];
+    if (p.initial) parts.push('initial');
+    if (p.final) parts.push('final');
+    if (p.tone) parts.push('tone');
+    if (!parts.length) parts.push('full');
+    part = parts[Math.floor(Math.random() * parts.length)];
+  }
+  if (part === 'initial'){
+    answer = p.initial; displayJp = '___' + p.final + p.tone; prompt = '声母'; placeholder = '如 b';
+  } else if (part === 'final'){
+    answer = p.final; displayJp = p.initial + '___' + p.tone; prompt = '韵母'; placeholder = '如 aa';
+  } else if (part === 'tone'){
+    answer = p.tone; displayJp = p.initial + p.final + '___'; prompt = '声调'; placeholder = '1-6';
+  }
+  return {han: item.han, fullJp: p.full, part, answer, displayJp, prompt, placeholder, type: item.type};
 }
 function renderJpDrill(){
   const body = $('#jpBody'), stat = $('#jpStat');
   if(!body) return;
   if(!jd.on){
-    body.innerHTML = '<p class="tip" style="margin:0 0 12px">听到发音写出粤拼（如 <code>sik6</code>），或者看汉字写粤拼。手机可以用下面的 1–6 快捷键盘输入声调数字。</p>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+    body.innerHTML = '<p class="tip" style="margin:0 0 12px">听到发音写出对应部分，或者看汉字写粤拼。手机可以用下面的 1–6 快捷键盘输入声调数字。</p>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">' +
         '<button type="button" class="btn btn-primary" id="jpStartAudio">🔊 听音写拼（10 题）</button>' +
         '<button type="button" class="btn btn-ghost" id="jpStartHan">🈶 看字写拼（10 题）</button>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+        '<span class="tip" style="margin:0">难度：</span>' +
+        '<button type="button" class="chip ' + (jd.difficulty === 'easy' ? 'chip-green' : 'chip-ghost') + '" id="jpDiffEasy">简单：只填声母 / 韵母 / 声调</button>' +
+        '<button type="button" class="chip ' + (jd.difficulty === 'standard' ? 'chip-green' : 'chip-ghost') + '" id="jpDiffStandard">标准：填写完整粤拼</button>' +
       '</div>';
-    const start = mode => { jd = {on:true, i:0, correct:0, streak:0, best:0, total:10, answer:null, mode}; jpNext(); };
+    const start = mode => { jd = {on:true, i:0, correct:0, streak:0, best:0, total:10, answer:null, mode, difficulty:jd.difficulty}; jpNext(); };
     const sa = $('#jpStartAudio'); if(sa) sa.onclick = () => start('audio');
     const sh = $('#jpStartHan'); if(sh) sh.onclick = () => start('han');
+    const de = $('#jpDiffEasy'); if(de) de.onclick = () => { jd.difficulty = 'easy'; renderJpDrill(); };
+    const ds = $('#jpDiffStandard'); if(ds) ds.onclick = () => { jd.difficulty = 'standard'; renderJpDrill(); };
     if(stat) stat.textContent = '未开始';
     return;
   }
@@ -894,43 +974,46 @@ function renderJpDrill(){
       '<p>答对 ' + jd.correct + ' / ' + jd.total + ' 题 · 最高连击 ' + jd.best + '</p>' +
       '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button type="button" class="btn btn-primary" id="jpRestart">🔄 再来一轮</button><button type="button" class="btn btn-ghost" id="jpSwitch">↻ 换模式</button></div></div>';
     const rt = $('#jpRestart');
-    if(rt) rt.onclick = () => { jd = {on:true, i:0, correct:0, streak:0, best:0, total:10, answer:null, mode:jd.mode}; jpNext(); };
-    const sw = $('#jpSwitch'); if(sw) sw.onclick = () => { jd = {on:false, i:0, correct:0, streak:0, best:0, total:10, answer:null, mode:'audio'}; renderJpDrill(); };
+    if(rt) rt.onclick = () => { jd = {on:true, i:0, correct:0, streak:0, best:0, total:10, answer:null, mode:jd.mode, difficulty:jd.difficulty}; jpNext(); };
+    const sw = $('#jpSwitch'); if(sw) sw.onclick = () => { jd = {on:false, i:0, correct:0, streak:0, best:0, total:10, answer:null, mode:'audio', difficulty:jd.difficulty}; renderJpDrill(); };
     if(stat) stat.textContent = '完成 ' + pct + '%';
     return;
   }
-  const pool = jpDrillPool();
-  const ans = pool[Math.floor(Math.random() * pool.length)];
-  jd.answer = ans;
-  body.innerHTML = '<div class="td-q">第 ' + (jd.i+1) + ' / ' + jd.total + ' 题</div>' +
+  const q = jpBuildQuestion(jd.difficulty);
+  jd.answer = q;
+  const display = q.displayJp ? '<div class="jp-partial" lang="yue-Latn">' + esc(q.displayJp) + '</div>' : '';
+  body.innerHTML = '<div class="td-q">第 ' + (jd.i+1) + ' / ' + jd.total + ' 题 · 填写「' + esc(q.prompt) + '」</div>' +
     (jd.mode === 'audio'
       ? '<button type="button" class="btn btn-primary td-play" id="jpPlay">🔊 听发音</button>'
-      : '<div class="jp-han" lang="yue-Hant-HK">' + esc(ans.han) + '</div>') +
+      : '<div class="jp-han" lang="yue-Hant-HK">' + esc(q.han) + '</div><button type="button" class="btn btn-ghost sm" id="jpPlay" style="margin:0 auto 12px;display:block">🔊 再听一次</button>') +
+    display +
     '<div class="jp-input-row">' +
-      '<input id="jpInput" class="jp-input" type="text" inputmode="latin" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="输入粤拼，如 sik6" aria-label="输入粤拼">' +
+      '<input id="jpInput" class="jp-input" type="text" inputmode="latin" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="' + esc(q.placeholder) + '" aria-label="' + esc(q.prompt) + '">' +
       '<button type="button" class="btn btn-primary sm" id="jpSubmit">提交</button>' +
     '</div>' +
     '<div class="jp-keys">' + [1,2,3,4,5,6].map(n => '<button type="button" class="jp-key" data-n="' + n + '">' + n + '</button>').join('') + '</div>' +
     '<div class="td-fb" id="jpFb"></div>';
-  const pl = $('#jpPlay'); if(pl) pl.onclick = () => speak(ans.han, {rate:0.7});
-  if(jd.mode === 'audio') setTimeout(() => speak(ans.han, {rate:0.7}), 300);
+  const play = () => speak(q.han, {rate:0.7});
+  const pl = $('#jpPlay'); if(pl) pl.onclick = play;
+  if(jd.mode === 'audio') setTimeout(play, 300);
   const inp = $('#jpInput');
   $$('#jpBody .jp-key').forEach(b => b.onclick = () => { inp.value = (inp.value || '') + b.dataset.n; inp.focus(); });
   const submit = () => jpCheck(inp ? inp.value : '');
   const sb = $('#jpSubmit'); if(sb) sb.onclick = submit;
   if(inp) inp.onkeydown = e => { if(e.key === 'Enter') submit(); };
+  if(inp) inp.focus();
 }
 function jpCheck(value){
   const fb = $('#jpFb');
   const norm = s => String(s || '').trim().toLowerCase().replace(/\s+/g, '');
-  const ok = norm(value) === norm(jd.answer.jp);
-  const label = esc(jd.answer.han) + ' → ' + jd.answer.jp;
+  const ok = norm(value) === norm(jd.answer.answer);
+  const label = esc(jd.answer.han) + ' → ' + jd.answer.fullJp + (jd.answer.part === 'full' ? '' : ' · 本题填「' + jd.answer.prompt + '」');
   if(ok){ jd.correct++; jd.streak++; jd.best = Math.max(jd.best, jd.streak); if(fb) fb.innerHTML = '<span class="td-ok">✅ 啱！' + label + '</span>'; }
   else { jd.streak = 0; if(fb) fb.innerHTML = '<span class="td-no">❌ 正确答案是 ' + label + '</span>'; }
   const inp = $('#jpInput'); if(inp) inp.disabled = true;
   const sb = $('#jpSubmit'); if(sb) sb.disabled = true;
   jd.i++;
-  setTimeout(() => { jd.i >= jd.total ? renderJpDrill() : jpNext(); }, 1200);
+  setTimeout(() => { jd.i >= jd.total ? renderJpDrill() : jpNext(); }, 1400);
 }
 function jpNext(){ renderJpDrill(); }
 
@@ -1379,30 +1462,69 @@ function renderLessonStep(L, st){
     const renderTone = () => {
       if(gi >= step.pairs.length){ advance(); return; }
       const pair = step.pairs[gi];
+      const right = pair.ans === 'a' ? pair.a : pair.b;
+      let tries = 0, settled = false;
       openModal(head +
         '<div style="text-align:center;padding:14px 0 6px">' +
           '<div style="font-weight:700;color:var(--ink-2)">' + esc(pair.ask) + '</div>' +
           '<div style="display:flex;gap:12px;justify-content:center;margin-top:14px">' +
-            '<button type="button" class="btn btn-ghost" id="ltA">🔊 ' + esc(pair.a.han) + ' <span style="opacity:.7">' + pair.a.jp + '</span></button>' +
-            '<button type="button" class="btn btn-ghost" id="ltB">🔊 ' + esc(pair.b.han) + ' <span style="opacity:.7">' + pair.b.jp + '</span></button>' +
+            '<button type="button" class="btn btn-ghost" id="ltA">🔊 ' + esc(pair.a.han) + '<span class="lt-jp" id="ltJpA" style="opacity:.7"></span></button>' +
+            '<button type="button" class="btn btn-ghost" id="ltB">🔊 ' + esc(pair.b.han) + '<span class="lt-jp" id="ltJpB" style="opacity:.7"></span></button>' +
           '</div>' +
           '<div class="td-fb" id="ltFb" style="margin-top:12px"></div>' +
         '</div>' +
-        '<div style="display:flex;gap:8px;justify-content:center;margin-top:6px">' +
+        '<div style="display:flex;gap:8px;justify-content:center;margin-top:6px;flex-wrap:wrap">' +
           '<button type="button" class="quiz-opt" id="ltPickA" style="grid-column:auto">选「' + esc(pair.a.han) + '」</button>' +
           '<button type="button" class="quiz-opt" id="ltPickB" style="grid-column:auto">选「' + esc(pair.b.han) + '」</button>' +
-        '</div>');
+          '<button type="button" class="btn btn-ghost sm" id="ltReplay">🔁 两个都听一次</button>' +
+        '</div>' +
+        '<div id="ltNextWrap" style="display:flex;justify-content:center;margin-top:10px"></div>');
       $('#ltA').onclick = () => speak(pair.a.han);
       $('#ltB').onclick = () => speak(pair.b.han);
+      $('#ltReplay').onclick = () => { speak(pair.a.han); speak(pair.b.han, {queue:true}); };
+      /* 粤拼在作答后才揭示，避免提前泄露答案 */
+      const revealJp = () => {
+        const ja = $('#ltJpA'), jb = $('#ltJpB');
+        if(ja) ja.textContent = ' ' + pair.a.jp;
+        if(jb) jb.textContent = ' ' + pair.b.jp;
+      };
+      const showContinue = () => {
+        const wrap = $('#ltNextWrap');
+        if(!wrap) return;
+        wrap.innerHTML = '<button type="button" class="btn btn-primary" id="ltNext">继续 →</button>';
+        $('#ltNext').onclick = () => { gi++; renderTone(); };
+      };
       const pick = isA => {
+        if(settled) return;
         const ok = (pair.ans === 'a') === isA;
-        $('#ltFb').textContent = ok ? '✅ 啱晒！' + (pair.ans==='a'?pair.a.han+' = '+pair.a.jp:pair.b.han+' = '+pair.b.jp) : '再听一次，听清楚声调先';
-        $('#ltFb').className = 'td-fb ' + (ok ? 'td-ok' : 'td-no');
-        $('#ltPickA').disabled = true; $('#ltPickB').disabled = true;
+        const fb = $('#ltFb');
+        const pickedBtn = isA ? $('#ltPickA') : $('#ltPickB');
         if(ok){
-          score++;
-          setTimeout(() => { gi++; renderTone(); }, 900);
+          settled = true; score++;
+          revealJp();
+          fb.textContent = '✅ 啱晒！' + right.han + ' = ' + right.jp;
+          fb.className = 'td-fb td-ok';
+          pickedBtn.classList.add('correct');
+          $('#ltPickA').disabled = true; $('#ltPickB').disabled = true;
+          setTimeout(() => { gi++; renderTone(); }, 1100);
+          return;
         }
+        /* 答错不卡死：第一次保留两个选项重选，第二次才公布答案并给「继续」 */
+        tries++;
+        fb.className = 'td-fb td-no';
+        if(tries < 2){
+          fb.textContent = '唔啱哦～再听一次，留意声调高低，可以再选';
+          pickedBtn.classList.add('wrong');
+          setTimeout(() => pickedBtn && pickedBtn.classList.remove('wrong'), 600);
+          return;
+        }
+        settled = true;
+        revealJp();
+        fb.textContent = '正确答案：' + right.han + ' = ' + right.jp + '（听多几次就分得出）';
+        pickedBtn.classList.add('wrong');
+        ((pair.ans === 'a') ? $('#ltPickA') : $('#ltPickB')).classList.add('correct');
+        $('#ltPickA').disabled = true; $('#ltPickB').disabled = true;
+        showContinue();
       };
       $('#ltPickA').onclick = () => pick(true);
       $('#ltPickB').onclick = () => pick(false);

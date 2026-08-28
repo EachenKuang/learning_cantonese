@@ -7,7 +7,7 @@
    - 备份前后均校验 JSON 可读取（损坏即失败退出，不静默）
    - 文件权限 0600（含密码哈希与会话令牌）
    - 异地保存加密：设置环境变量 JYUT_BACKUP_KEY（32 字节 hex）后
-     备份将用 AES-256-GCM 加密写入 .enc 后缀（本地仍留明文 0600）
+     备份改用 AES-256-GCM 加密，落盘为 .enc 后缀（此时不再落明文副本）
 
    运行：node server/backup-store.mjs
    systemd：deploy/jyut-backup.service + jyut-backup.timer（每日 03:17）
@@ -64,10 +64,11 @@ if(isSunday()){
   weeklyWritten = true;
 }
 
-/* 清理过期备份 */
+/* 清理过期备份（明文 .json 与加密 .json.enc 都要清理，否则启用加密后旧文件会无限堆积） */
 const files = await readdir(BACKUP_DIR);
+const isBackupFile = f => f.endsWith('.json') || f.endsWith('.json.enc');
 const prune = (prefix, keep) => {
-  const list = files.filter(f => f.startsWith(prefix) && f.endsWith('.json')).sort();
+  const list = files.filter(f => f.startsWith(prefix) && isBackupFile(f)).sort();
   while(list.length > keep){
     const gone = path.join(BACKUP_DIR, list.shift());
     unlink(gone).catch(() => {});

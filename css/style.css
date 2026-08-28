@@ -878,6 +878,10 @@ input{font-family:inherit;color:inherit}
 }
 .jp-key:hover{background:var(--red-soft);color:var(--red)}
 .jp-han{font-family:var(--serif);font-size:32px;font-weight:900;color:var(--red);text-align:center;padding:4px 0 6px}
+.jp-partial{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:24px;font-weight:800;color:var(--ink);text-align:center;margin:6px 0 10px;letter-spacing:1px}
+.jp-partial::before{content:'💡 ';font-family:var(--font)}
+.chip-ghost{background:var(--card);color:var(--ink-2);border:1px solid var(--line);cursor:pointer;transition:all .18s}
+.chip-ghost:hover{border-color:var(--red);color:var(--red);background:var(--red-soft)}
 .td-ok{color:var(--green)}
 .td-no{color:var(--red)}
 .td-done{text-align:center;padding:10px 0}

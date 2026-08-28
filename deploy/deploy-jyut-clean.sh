@@ -68,6 +68,18 @@ wait_health(){
   return 1
 }
 
+# 自动备份此前只存在于仓库、从未安装到 systemd，导致备份实际未运行
+install_backup_units(){
+  # unit 的 ExecStart 指向 /opt/jyut-sync-live/backup-store.mjs，先确认已发布到位
+  test -f "$SYNC_LIVE/backup-store.mjs" || { echo "backup-store.mjs missing in $SYNC_LIVE" >&2; return 1; }
+  install -m 0644 "$SOURCE_DIR/deploy/jyut-backup.service" /etc/systemd/system/jyut-backup.service
+  install -m 0644 "$SOURCE_DIR/deploy/jyut-backup.timer" /etc/systemd/system/jyut-backup.timer
+  systemctl daemon-reload
+  systemctl enable --now jyut-backup.timer
+  systemctl is-active --quiet jyut-backup.timer || { echo "jyut-backup.timer failed to start" >&2; return 1; }
+  echo "[$(date '+%F %T')] backup timer enabled: $(systemctl list-timers jyut-backup.timer --no-legend | head -1)"
+}
+
 rollback(){
   local status=$?
   trap - ERR
@@ -102,16 +114,19 @@ if [ "$COMMIT" != "$TARGET_COMMIT" ]; then
   exit 1
 fi
 
-for file in index.html sw.js manifest.webmanifest css/style.css js/app.js js/data.js js/songs.js server/sync-server.mjs server/sync-store.mjs server/manage-user.mjs server/tts-proxy.mjs server/package.json server/package-lock.json; do
+for file in index.html sw.js manifest.webmanifest css/style.css js/app.js js/data.js js/songs.js js/lessons.js js/stories.js server/sync-server.mjs server/sync-store.mjs server/manage-user.mjs server/backup-store.mjs server/tts-proxy.mjs server/package.json server/package-lock.json deploy/jyut-backup.service deploy/jyut-backup.timer; do
   test -f "$SOURCE_DIR/$file" || { echo "Missing required file: $file" >&2; exit 1; }
 done
 
 "$NODE_BIN" --check "$SOURCE_DIR/js/app.js"
 "$NODE_BIN" --check "$SOURCE_DIR/js/data.js"
 "$NODE_BIN" --check "$SOURCE_DIR/js/songs.js"
+"$NODE_BIN" --check "$SOURCE_DIR/js/lessons.js"
+"$NODE_BIN" --check "$SOURCE_DIR/js/stories.js"
 "$NODE_BIN" --check "$SOURCE_DIR/server/sync-server.mjs"
 "$NODE_BIN" --check "$SOURCE_DIR/server/sync-store.mjs"
 "$NODE_BIN" --check "$SOURCE_DIR/server/manage-user.mjs"
+"$NODE_BIN" --check "$SOURCE_DIR/server/backup-store.mjs"
 "$NODE_BIN" --check "$SOURCE_DIR/server/tts-proxy.mjs"
 
 CACHE_VERSION="$(sed -n "s/^const CACHE = 'canto-shell-v\([0-9][0-9]*\)';$/\1/p" "$SOURCE_DIR/sw.js")"
@@ -143,7 +158,7 @@ if [ ! -d "$STATIC_RELEASE" ]; then
 fi
 
 SYNC_CHANGED=1
-if [ -d "$SYNC_LIVE" ] && cmp -s "$SOURCE_DIR/server/sync-server.mjs" "$SYNC_LIVE/sync-server.mjs" && cmp -s "$SOURCE_DIR/server/sync-store.mjs" "$SYNC_LIVE/sync-store.mjs" && cmp -s "$SOURCE_DIR/server/manage-user.mjs" "$SYNC_LIVE/manage-user.mjs"; then
+if [ -d "$SYNC_LIVE" ] && cmp -s "$SOURCE_DIR/server/sync-server.mjs" "$SYNC_LIVE/sync-server.mjs" && cmp -s "$SOURCE_DIR/server/sync-store.mjs" "$SYNC_LIVE/sync-store.mjs" && cmp -s "$SOURCE_DIR/server/manage-user.mjs" "$SYNC_LIVE/manage-user.mjs" && cmp -s "$SOURCE_DIR/server/backup-store.mjs" "$SYNC_LIVE/backup-store.mjs"; then
   SYNC_CHANGED=0
 fi
 SYNC_RELEASE="$OLD_SYNC"
@@ -151,7 +166,7 @@ if [ "$SYNC_CHANGED" -eq 1 ]; then
   SYNC_RELEASE="$SYNC_BASE/$COMMIT"
   if [ ! -d "$SYNC_RELEASE" ]; then
     SYNC_STAGE="$(mktemp -d "$SYNC_BASE/.stage.XXXXXX")"
-    install -m 0644 "$SOURCE_DIR/server/sync-server.mjs" "$SOURCE_DIR/server/sync-store.mjs" "$SOURCE_DIR/server/manage-user.mjs" "$SOURCE_DIR/server/package.json" "$SYNC_STAGE/"
+    install -m 0644 "$SOURCE_DIR/server/sync-server.mjs" "$SOURCE_DIR/server/sync-store.mjs" "$SOURCE_DIR/server/manage-user.mjs" "$SOURCE_DIR/server/backup-store.mjs" "$SOURCE_DIR/server/package.json" "$SYNC_STAGE/"
     chmod 0755 "$SYNC_STAGE"
     mv "$SYNC_STAGE" "$SYNC_RELEASE"
     SYNC_STAGE=""
@@ -189,6 +204,9 @@ if [ "$TTS_CHANGED" -eq 1 ]; then
   systemctl restart jyut-tts
   wait_health "http://127.0.0.1:8787/health"
 fi
+
+# 备份 unit 依赖 /opt/jyut-sync-live/backup-store.mjs 已就位，故放在 sync 切换之后
+install_backup_units
 
 switch_link "$STATIC_RELEASE" "$STATIC_LIVE"
 STATIC_SWITCHED=1

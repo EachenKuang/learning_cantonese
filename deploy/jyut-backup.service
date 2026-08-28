@@ -4,11 +4,31 @@ After=jyut-sync.service
 
 [Service]
 Type=oneshot
-# 备份目录默认在 store.json 同级 backups/ 下；如需异地加密，设置 JYUT_BACKUP_KEY（32 字节 hex）
+# 必须与 jyut-sync.service 同用户：备份要读取 /var/lib/jyut-sync/store.json
+User=jyut-sync
+Group=jyut-sync
+WorkingDirectory=/opt/jyut-sync-live
 Environment=NODE_ENV=production
-ExecStart=/usr/bin/node /opt/jyut/server/backup-store.mjs
-User=jyut
-Group=jyut
+# backup-store.mjs 复用 sync-store.mjs 的 DATA_FILE，必须显式指向同一份 store.json
+Environment=JYUT_SYNC_DATA_FILE=/var/lib/jyut-sync/store.json
+Environment=JYUT_BACKUP_DIR=/var/lib/jyut-sync/backups
+# 异地加密副本（可选）：把 JYUT_BACKUP_KEY（32 字节 hex）写进 /etc/jyut-backup.env（0600，属主 jyut-sync），
+# 再取消下一行注释。密钥不要直接写进 unit 文件（会被 systemd 暴露给非特权用户）。
+#EnvironmentFile=/etc/jyut-backup.env
+ExecStart=/usr/local/bin/node /opt/jyut-sync-live/backup-store.mjs
+UMask=0077
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths=/var/lib/jyut-sync
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=160M
+TasksMax=64
 
 [Install]
 WantedBy=timers.target
