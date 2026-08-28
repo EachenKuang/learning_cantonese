@@ -22,6 +22,7 @@
 
 **平台能力**：PWA（可安装、页面与已缓存内容离线可用）、响应式（桌面侧边栏 / 移动端底部导航）、明暗双主题、语音诊断面板（排查设备粤语语音包）、**SRS 间隔复习**（学过的词按遗忘曲线提醒）、**声调听辨训练**、**混合题型听力小测**（听词选义/最小对立/声调听辨）、录音实时电平条、长文本分块朗读。
 
+* **TTS 缓存与变速**：云端合成音频缓存到 IndexedDB（同一句只请求一次，上限 400 条自动淘汰）；语速由前端 `audio.playbackRate` 变速，切换语速无需重新合成、全语速共享缓存；自建代理另有磁盘缓存（同句秒回）
 **控件无障碍**：模态框焦点陷阱 + Esc 关闭 + 背景 inert（通用 openModal 封装，6 类弹层统一改造）；切换按钮 aria-pressed/aria-current（导航/分类/筛选/收藏/复习/循环/跟唱/主题/录音/文化 tab 共 10+ 处）；搜索框 aria-label + type=search 自带清除按钮；Toast aria-live=polite；进度滑块自定义样式 + aria-valuetext 时间文本；语速浮窗 aria-expanded + Esc 关闭 + 打开焦点进入；语音页 tablist + aria-selected + 方向键切换；录音按钮闪烁圆点（非纯颜色）+ aria-pressed；全部 124 个 button type=button；TTS 按钮防重入（guardBtn）。
 
 ---

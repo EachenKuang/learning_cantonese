@@ -286,6 +286,67 @@ function updateCloudUrls(){
   CLOUD_TTS_HEALTH_URL = CLOUD_TTS_URL.replace(/\/+$/,'') + '/health';
 }
 const cloudAudio = new Audio();
+/* ===== 云端 TTS 音频缓存（IndexedDB）：同一句只请求一次，所有语速共享 ===== */
+const TTS_CACHE_MAX = 400; /* 上限条数，超出淘汰最旧 */
+const TTS_META_KEY = '__meta__';
+let ttsDB = null;
+function openTTSDB(){
+  return new Promise((resolve, reject) => {
+    if(ttsDB) return resolve(ttsDB);
+    if(!('indexedDB' in window)) return reject(new Error('no-idb'));
+    const rq = indexedDB.open('jyut-tts-cache', 1);
+    rq.onupgradeneeded = () => {
+      const db = rq.result;
+      if(!db.objectStoreNames.contains('audio')) db.createObjectStore('audio');
+    };
+    rq.onsuccess = () => { ttsDB = rq.result; resolve(ttsDB); };
+    rq.onerror = () => reject(rq.error);
+  });
+}
+async function ttsCacheGet(key){
+  try{
+    const db = await openTTSDB();
+    return await new Promise((resolve, reject) => {
+      const rq = db.transaction('audio', 'readonly').objectStore('audio').get(key);
+      rq.onsuccess = () => resolve(rq.result || null);
+      rq.onerror = () => reject(rq.error);
+    });
+  }catch(_){ return null; }
+}
+async function ttsCacheSet(key, blob){
+  try{
+    const db = await openTTSDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('audio', 'readwrite');
+      const st = tx.objectStore('audio');
+      const getMeta = st.get(TTS_META_KEY);
+      getMeta.onsuccess = () => {
+        const order = (getMeta.result && Array.isArray(getMeta.result.order)) ? getMeta.result.order.filter(k => k !== key) : [];
+        order.push(key);
+        while(order.length > TTS_CACHE_MAX){
+          const drop = order.shift();
+          if(drop !== TTS_META_KEY) st.delete(drop);
+        }
+        st.put(blob, key);
+        st.put({order}, TTS_META_KEY);
+      };
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+    return true;
+  }catch(_){ return false; }
+}
+async function fetchTTS(text){
+  const url = new URL(CLOUD_TTS_URL, window.location.origin);
+  url.searchParams.set('text', text);
+  url.searchParams.set('rate', '1'); /* 固定 1x 合成，变速由前端 playbackRate 完成 → 缓存全语速共享 */
+  const res = await fetch(url, {cache:'no-store'});
+  if(!res.ok) throw new Error('tts ' + res.status);
+  const blob = await res.blob();
+  if(blob.size > 0) ttsCacheSet('tts|' + text, blob);
+  return blob;
+}
 let localYueVoice = null;
 let cloudTTS = {checked:false, ready:false, name:'晓佳（zh-HK-HiuGaaiNeural）'};
 let voiceInfo = {status:'detecting', name:''};
@@ -421,17 +482,10 @@ function playNextCloud(){
   const item = cloudQueue.shift();
   const generation = cloudGeneration;
   cloudPlaying = true;
-  const url = new URL(CLOUD_TTS_URL, window.location.origin);
-  url.searchParams.set('text', cleanForSpeech(item.text));
-  url.searchParams.set('rate', String(item.opts.rate ?? speechRate));
-  cloudAudio.src = url.toString();
+  const rate = item.opts.rate ?? speechRate;
+  const text = cleanForSpeech(item.text);
   let settled = false;
-  const finish = () => {
-    if(settled || generation !== cloudGeneration) return;
-    settled = true;
-    cloudPlaying = false;
-    playNextCloud();
-  };
+  const done = () => { if(settled || generation !== cloudGeneration) return; settled = true; cloudPlaying = false; playNextCloud(); };
   const fallback = () => {
     if(settled || generation !== cloudGeneration) return;
     settled = true;
@@ -439,9 +493,21 @@ function playNextCloud(){
     if(!speakLocal(item.text, item.opts)) notifyVoiceUnavailable();
     playNextCloud();
   };
-  cloudAudio.onended = finish;
-  cloudAudio.onerror = fallback;
-  cloudAudio.play().catch(fallback);
+  (async () => {
+    if(generation !== cloudGeneration) return;
+    let blob;
+    try{
+      blob = await ttsCacheGet('tts|' + text);
+      if(!blob) blob = await fetchTTS(text);
+    }catch(_){ return fallback(); }
+    if(generation !== cloudGeneration || settled) return;
+    const url = URL.createObjectURL(blob);
+    cloudAudio.src = url;
+    cloudAudio.playbackRate = rate; /* 前端变速：无需重新合成，缓存全语速共享 */
+    cloudAudio.onended = () => { URL.revokeObjectURL(url); done(); };
+    cloudAudio.onerror = () => { URL.revokeObjectURL(url); fallback(); };
+    cloudAudio.play().catch(() => { URL.revokeObjectURL(url); fallback(); });
+  })();
 }
 function splitChunks(t, max){
   const segs = t.split(/(?<=[，。！？、；：,.!?;:\s])/).filter(Boolean);
