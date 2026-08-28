@@ -1,0 +1,14 @@
+[Unit]
+Description=粵學堂 云端档案备份（每日 03:17，保留 7 日 + 4 周）
+After=jyut-sync.service
+
+[Service]
+Type=oneshot
+# 备份目录默认在 store.json 同级 backups/ 下；如需异地加密，设置 JYUT_BACKUP_KEY（32 字节 hex）
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node /opt/jyut/server/backup-store.mjs
+User=jyut
+Group=jyut
+
+[Install]
+WantedBy=timers.target

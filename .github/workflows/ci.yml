@@ -28,6 +28,12 @@ jobs:
           node --check sw.js
       - name: 数据完整性校验
         run: node scripts/verify-data.mjs
+      - name: 后端同步逻辑测试
+        run: |
+          node --check server/sync-store.mjs
+          node --check server/sync-server.mjs
+          node --check server/backup-store.mjs
+          node --test server/sync-store.test.mjs
 
   promote:
     needs: verify

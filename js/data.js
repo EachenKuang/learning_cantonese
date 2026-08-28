@@ -280,18 +280,18 @@ vocabCategories: [
 
 {
   id:'fun', name:'休闲娱乐', icon:'🎮', words:[
-    {han:'睇戏', jp:'tai2 hei3', mand:'看电影', ex:'今晚去唔去睇戏？', exjp:'gam1 maan5 heoi3 m4 heoi3 tai2 hei3?', exmand:'今晚去不去看电影？'},
+    {han:'睇戲', jp:'tai2 hei3', mand:'看电影', ex:'今晚去唔去睇戲？', exjp:'gam1 maan5 heoi3 m4 heoi3 tai2 hei3?', exmand:'今晚去不去看电影？'},
     {han:'唱K', jp:'coeng3 kei1', mand:'唱K', ex:'我哋去唱K啦。', exjp:'ngo5 dei6 heoi3 coeng3 kei1 laa1.', exmand:'我们去唱K吧。'},
     {han:'行山', jp:'haang4 saan1', mand:'爬山', ex:'星期日去行山。', exjp:'sing1 kei4 jat6 heoi3 haang4 saan1.', exmand:'星期天去爬山。'},
-    {han:'游水', jp:'jau4 seoi2', mand:'游泳', ex:'夏天好兴游水。', exjp:'haa6 tin1 hou2 hing1 jau4 seoi2.', exmand:'夏天流行游泳。'},
-    {han:'打机', jp:'daa2 gei1', mand:'打游戏', ex:'打机打到通宵。', exjp:'daa2 gei1 daa2 dou3 tung1 siu1.', exmand:'打游戏打通宵。'},
+    {han:'游水', jp:'jau4 seoi2', mand:'游泳', ex:'夏天好興游水。', exjp:'haa6 tin1 hou2 hing1 jau4 seoi2.', exmand:'夏天流行游泳。'},
+    {han:'打機', jp:'daa2 gei1', mand:'打游戏', ex:'打機打到通宵。', exjp:'daa2 gei1 daa2 dou3 tung1 siu1.', exmand:'打游戏打通宵。'},
     {han:'睇波', jp:'tai2 bo1', mand:'看球赛', ex:'今晚睇波睇到好夜。', exjp:'gam1 maan5 tai2 bo1 tai2 dou3 hou2 je6.', exmand:'今晚看球看到很晚。'},
-    {han:'影相', jp:'jing2 soeng2', mand:'拍照', ex:'同我影张相呀。', exjp:'tung4 ngo5 jing2 zoeng1 soeng2 aa3.', exmand:'帮我拍张照呀。'},
-    {han:'听歌', jp:'teng1 go1', mand:'听歌', ex:'我成日听歌。', exjp:'ngo5 seng4 jat6 teng1 go1.', exmand:'我经常听歌。'},
-    {han:'睇书', jp:'tai2 syu1', mand:'看书', ex:'得闲就睇书。', exjp:'dak1 haan4 zau6 tai2 syu1.', exmand:'有空就看书。'},
+    {han:'影相', jp:'jing2 soeng2', mand:'拍照', ex:'同我影張相呀。', exjp:'tung4 ngo5 jing2 zoeng1 soeng2 aa3.', exmand:'帮我拍张照呀。'},
+    {han:'聽歌', jp:'teng1 go1', mand:'听歌', ex:'我成日聽歌。', exjp:'ngo5 seng4 jat6 teng1 go1.', exmand:'我经常听歌。'},
+    {han:'睇書', jp:'tai2 syu1', mand:'看书', ex:'得閒就睇書。', exjp:'dak1 haan4 zau6 tai2 syu1.', exmand:'有空就看书。'},
     {han:'去旅行', jp:'heoi3 leoi5 hang4', mand:'去旅游', ex:'暑假去旅行。', exjp:'syu3 gaa3 heoi3 leoi5 hang4.', exmand:'暑假去旅游。'},
-    {han:'睇演唱会', jp:'tai2 jin2 coeng3 wui2', mand:'看演唱会', ex:'睇演唱会好激动。', exjp:'tai2 jin2 coeng3 wui2 hou2 gik1 dung6.', exmand:'看演唱会很激动。'},
-    {han:'钓鱼', jp:'diu3 jyu2', mand:'钓鱼', ex:'爷爷钟意钓鱼。', exjp:'je4 je4 zung1 ji3 diu3 jyu2.', exmand:'爷爷喜欢钓鱼。'},
+    {han:'睇演唱會', jp:'tai2 jin2 coeng3 wui2', mand:'看演唱会', ex:'睇演唱會好激動。', exjp:'tai2 jin2 coeng3 wui2 hou2 gik1 dung6.', exmand:'看演唱会很激动。'},
+    {han:'釣魚', jp:'diu3 jyu2', mand:'钓鱼', ex:'爺爺鍾意釣魚。', exjp:'je4 je4 zung1 ji3 diu3 jyu2.', exmand:'爷爷喜欢钓鱼。'},
   ]},
 ],
 

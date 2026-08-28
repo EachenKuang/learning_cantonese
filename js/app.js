@@ -727,7 +727,7 @@ function renderHome(){
   /* 模块入口 */
   const mods = [
     {ico:'🎙️', t:'语音学习', d:'粤拼声母 · 韵母 · 声调，录音对比发音', nav:'phonetics'},
-    {ico:'📖', t:'场景词汇', d:`10 大场景 ${totalWords} 词，点卡即读 + 听力小测`, nav:'vocab'},
+    {ico:'📖', t:'场景词汇', d:`11 大场景 ${totalWords} 词，点卡即读 + 听力小测`, nav:'vocab'},
     {ico:'💬', t:'对话实战', d:'茶楼点餐、街市买菜，跟读 + 角色扮演', nav:'dialogues'},
     {ico:'🎵', t:'学唱粤语歌', d:'11 首经典金曲全曲歌词，逐句跟唱练咬字', nav:'sing'},
     {ico:'🧩', t:'语法专栏', d:'量词 · 语气词 · 体貌助词，十讲吃透', nav:'grammar'},
@@ -926,7 +926,7 @@ function renderVocabGrid(){
     <div class="word-card" style="animation:pageIn .4s ${idx*0.02}s backwards">
       <div class="wc-top">
         <div>
-          <div class="wc-han">${w.han}</div>
+          <div class="wc-han" lang="yue-Hant-HK">${w.han}</div>
           <div class="wc-jp">${w.jp}</div>
         </div>
         <button type="button" class="wc-fav ${fav?'on':''}" title="收藏">${fav?'★':'☆'}</button>
@@ -1003,22 +1003,27 @@ function reviewWord(key){
   return w ? {cat, w} : null;
 }
 function reviewBoxGap(key){
-  const p = getProgress(); if(!p || !p.reviews || !p.reviews[key]) return 2;
-  return (p.reviews[key].box || 1) * 2;
+  const p = getProgress(); if(!p || !p.reviews || !p.reviews[key]) return 1;
+  const box = p.reviews[key].box || 1;
+  return box === 5 ? SRS_MAX_GAP : (SRS_GAPS[box] ?? 1);
 }
 function updateReviewBtn(){
   const n = reviewDueCount();
   const btn = $('#reviewBtn');
   if(btn) btn.textContent = n > 0 ? '📅 待复习 (' + n + ')' : '📅 待复习';
 }
+/* SRS 轻量节奏：box1 当天回忆(0) → box2 1天 → box3 3天 → box4 7天 → box5 14天 → 封顶 30 天 */
+const SRS_GAPS = [0, 0, 1, 3, 7, 14];
+const SRS_MAX_GAP = 30;
 function reviewAnswer(key, remembered){
   const p = getProgress(); if(!p) return;
   p.reviews = p.reviews || {};
   const today = todayKey();
   const r = p.reviews[key] || {box:1, due:today};
   if(remembered){
-    r.box = Math.min((r.box || 1) + 1, 5);
-    const gap = (r.box || 1) * 2; /* 2/4/6/8/10 天递增 */
+    const prevBox = r.box || 1;
+    r.box = Math.min(prevBox + 1, 5);
+    const gap = (r.box === 5 && prevBox === 5) ? SRS_MAX_GAP : SRS_GAPS[r.box];
     const due = new Date(); due.setDate(due.getDate() + gap);
     r.due = due.toISOString().slice(0,10);
   } else {
@@ -1026,6 +1031,7 @@ function reviewAnswer(key, remembered){
     const due = new Date(); due.setDate(due.getDate() + 1);
     r.due = due.toISOString().slice(0,10);
   }
+  r.updatedAt = Date.now(); /* 多设备合并裁决依据 */
   p.reviews[key] = r;
   saveProgress(p);
 }
@@ -1035,7 +1041,7 @@ function markWordLearned(catId, w){
   const key = catId + ':' + w.han;
   if(!p.learned.includes(key)) p.learned.push(key);
   p.reviews = p.reviews || {};
-  if(!p.reviews[key]) p.reviews[key] = {box:1, due:todayKey()};
+  if(!p.reviews[key]) p.reviews[key] = {box:1, due:todayKey(), updatedAt: Date.now()};
   const today = todayKey();
   if(p.goalDate !== today){ p.goalDate = today; p.goalToday = 0; p.goalWords = []; }
   p.goalWords = p.goalWords || [];
@@ -1065,6 +1071,90 @@ const MINIMAL_PAIRS = [
   {group:[{han:'包',jp:'baau1'},{han:'飽',jp:'baau2'},{han:'豹',jp:'baau3'}], mand:'包/饱/豹'},
   {group:[{han:'色',jp:'sik1'},{han:'錫',jp:'sik3'},{han:'食',jp:'sik6'}], mand:'色/锡/食（入声）'},
 ];
+
+/* ================= 今日 5 词（学 5 个 → 回忆 → 小测 → 入复习计划） ================= */
+let d5 = {words:[], step:0, qIdx:0, score:0, order:[]};
+function daily5Start(){
+  const p = getProgress(); if(!p) return;
+  const learnedSet = new Set(p.learned || []);
+  const all = DATA.vocabCategories.flatMap(c => c.words.map(w => ({...w, cat:c.id})));
+  const fresh = all.filter(w => !learnedSet.has(w.cat + ':' + w.han));
+  const pick = fresh.slice(0, 5);
+  while(pick.length < 5 && all.length){
+    const w = all[Math.floor(Math.random() * all.length)];
+    if(!pick.includes(w)) pick.push(w);
+  }
+  d5 = {words: pick.slice(0,5), step:0, qIdx:0, score:0, order: pick.map((_,i)=>i)};
+  d5Render();
+}
+function d5Render(){
+  const c = d5;
+  if(c.step === 0){
+    const w = c.words[c.qIdx];
+    openModal('<h3>🎯 今日 5 词 <span class="chip chip-gold" style="margin-left:auto">学习 ' + (c.qIdx+1) + ' / ' + c.words.length + '</span></h3>' +
+      '<div style="text-align:center;padding:18px 0 6px">' +
+        '<div style="font-size:36px;font-weight:900;color:var(--red)">' + esc(w.han) + '</div>' +
+        '<div style="color:var(--ink-2);margin-top:6px;font-size:15px">' + w.jp + '</div>' +
+        '<div style="color:var(--ink-3);font-size:13px;margin-top:6px">' + esc(w.mand) + '</div>' +
+        '<button type="button" class="btn btn-primary sm" id="d5Play" style="margin-top:14px">🔊 听发音</button>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:flex-end;margin-top:12px">' +
+        '<button type="button" class="btn btn-primary" id="d5Next">' + (c.qIdx===c.words.length-1 ? '开始回忆 →' : '下一个') + '</button>' +
+      '</div>');
+    $('#d5Play').onclick = () => speak(w.han);
+    $('#d5Next').onclick = () => {
+      if(c.qIdx < c.words.length-1){ c.qIdx++; d5Render(); }
+      else { c.step=1; c.qIdx=0; c.order = c.words.map((_,i)=>i).sort(()=>Math.random()-0.5); d5Render(); }
+    };
+  } else if(c.step === 1){
+    const w = c.words[c.order[c.qIdx]];
+    openModal('<h3>🎯 今日 5 词 <span class="chip chip-gold" style="margin-left:auto">回忆 ' + (c.qIdx+1) + ' / ' + c.words.length + '</span></h3>' +
+      '<div style="text-align:center;padding:18px 0 6px">' +
+        '<div id="d5RecallHan" style="font-size:24px;font-weight:900;color:var(--ink-3)">❓ 想到这个字怎么写？</div>' +
+        '<div style="color:var(--ink-2);margin-top:10px;font-size:15px">' + w.jp + '</div>' +
+        '<div style="color:var(--ink-3);font-size:13px;margin-top:6px">' + esc(w.mand) + '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">' +
+        '<button type="button" class="btn btn-ghost" id="d5Reveal">👀 显示汉字</button>' +
+        '<button type="button" class="btn btn-primary" id="d5Next2">' + (c.qIdx===c.words.length-1 ? '开始小测 →' : '下一个') + '</button>' +
+      '</div>');
+    $('#d5Reveal').onclick = () => { const el = $('#d5RecallHan'); el.textContent = w.han; el.style.color = 'var(--red)'; };
+    $('#d5Next2').onclick = () => {
+      if(c.qIdx < c.words.length-1){ c.qIdx++; d5Render(); }
+      else { c.step=2; c.qIdx=0; c.order = c.words.map((_,i)=>i).sort(()=>Math.random()-0.5); d5Render(); }
+    };
+  } else if(c.step === 2){
+    const w = c.words[c.order[c.qIdx]];
+    const pool = DATA.vocabCategories.flatMap(x => x.words);
+    const opts = shuffleOpts(w, pool);
+    openModal('<h3>🎯 今日 5 词 <span class="chip chip-gold" style="margin-left:auto">小测 ' + (c.qIdx+1) + ' / ' + c.words.length + '</span></h3>' +
+      '<div style="text-align:center;margin:8px 0 12px;font-weight:700;color:var(--ink-2)">🔊 听发音，选正确释义</div>' +
+      '<div style="text-align:center;margin-bottom:14px;font-size:20px;color:var(--red);font-weight:900">' + esc(w.han) + '</div>' +
+      opts.map((o,i) => '<button type="button" class="quiz-opt" data-opt="' + i + '">' + (i+1) + '. ' + esc(o.mand) + '</button>').join('') +
+      '<div class="quiz-progress">答对 ' + c.score + ' / ' + c.qIdx + ' 题</div>');
+    speak(w.han);
+    $$('#modalRoot .quiz-opt').forEach(b => b.onclick = () => {
+      const picked = opts[+b.dataset.opt];
+      $$('#modalRoot .quiz-opt').forEach(x => { x.disabled = true; if(x === b) x.classList.add(picked.mand===w.mand ? 'correct' : 'wrong'); });
+      if(picked.mand === w.mand) c.score++;
+      toast(picked.mand===w.mand ? '答啱咗 👍' : '正确答案：' + w.mand);
+      setTimeout(() => { if(c.qIdx < c.words.length-1){ c.qIdx++; d5Render(); } else d5Finish(); }, 1300);
+    });
+  }
+}
+function d5Finish(){
+  const c = d5, p = getProgress();
+  c.words.forEach(w => markWordLearned(w.cat, w));
+  openModal('<h3>🎯 今日 5 词完成 🎉</h3>' +
+    '<div style="text-align:center;padding:16px 0">' +
+      '<div style="font-size:44px">' + (c.score>=4?'🏆' : c.score>=2?'💪':'📚') + '</div>' +
+      '<div style="font-size:24px;font-weight:900;margin-top:8px;color:var(--red)">' + c.score + ' / ' + c.words.length + '</div>' +
+      '<p style="color:var(--ink-3);margin-top:8px">' + (c.score>=4?'犀利！今日目标 +5 词' : c.score>=2?'唔错！明早再复习一次':'慢慢嚟，多听几次～') + '</p>' +
+      '<p style="color:var(--ink-3);font-size:12.5px;margin-top:4px">已加入复习计划，明天开始按遗忘曲线提醒你</p>' +
+    '</div>' +
+    '<div style="display:flex;justify-content:flex-end"><button type="button" class="btn btn-primary" id="d5Done">完成</button></div>');
+  $('#d5Done').onclick = () => { closeModal(); renderVocab(); };
+}
 let quizVoiceWarned = false;
 function openQuiz(){
   /* 无可用语音时先引导（听力小测依赖发音），检测完成且全部不可用时弹一次 */
@@ -1182,7 +1272,7 @@ function renderDialogues(){
       <span class="dc-emoji">${d.emoji}</span>
       <h3>${d.title}</h3>
       <p>${esc(d.desc)}</p>
-      <div class="dc-lines">共 ${d.lines.length} 句台词 · 水平 ${d.level}</div>
+      <div class="dc-lines">共 ${d.lines.length} 句台词</div>
       <div class="dc-tags">
         <span class="dc-tag">${d.level}</span>
         ${d.tags.map(t=>`<span class="dc-tag">${t}</span>`).join('')}
@@ -1217,7 +1307,7 @@ function renderDlg(){
         ${roles.map(r => `<button type="button" class="ph-tab ${dlgRole===r?'active':''}" data-role="${esc(r)}">${esc(r)}</button>`).join('')}
       ` : ''}
       ${dlgMode==='role' && dlgRole ? `
-        <button type="button" class="btn btn-primary sm" id="roleStart">▶ 播放对方台词</button>
+        <button type="button" class="btn btn-primary sm" id="roleStart">▶ 开始对话</button>
         <button type="button" class="btn btn-ghost sm" id="roleShow" style="display:none">👀 查看答案</button>
         <button type="button" class="btn btn-ghost sm" id="roleReset">↻ 重置</button>
       ` : ''}
@@ -1228,7 +1318,7 @@ function renderDlg(){
           <div class="dl-speaker">${l.speaker==='侍应'?'🧑‍🍳':l.speaker==='食客'?'🧔':l.speaker==='档主'?'👩‍🌾':l.speaker==='顾客'?'🛍️':l.speaker==='乘客'?'🧳':l.speaker==='司机'?'🚌':l.speaker==='游客'?'🧢':l.speaker==='路人'?'🚶':l.speaker==='护士'?'👩‍⚕️':l.speaker==='病人'?'🤒':'💬'}</div>
           <div class="dl-body">
             <div class="dl-name">${esc(l.speaker)}</div>
-            <div class="dl-text">${esc(l.han)}</div>
+            <div class="dl-text" lang="yue-Hant-HK">${esc(l.han)}</div>
             <div class="dl-jp">${l.jp}</div>
             <div class="dl-mand">${esc(l.mand)}</div>
             ${dlgMode==='follow' ? `
@@ -1238,6 +1328,7 @@ function renderDlg(){
               </div>` : dlgRole===l.speaker ? `
               <div class="dl-tools">
                 <button type="button" class="dl-btn" data-act="play" data-i="${i}">🔊 听答案</button>
+                <button type="button" class="dl-btn rec" data-act="next" data-i="${i}">✅ 读好了</button>
               </div>` : ''}
           </div>
         </div>`).join('')}
@@ -1249,7 +1340,7 @@ function renderDlg(){
   const dlpa = $('#dlgPlayAll'); if(dlpa) dlpa.onclick = () => { if(!curDlg) return; if(!guardBtn(dlpa)) return; curDlg.lines.forEach(l => speak(l.han, {queue:true})); };
   const rs = $('#roleStart'); if(rs) rs.onclick = roleStart;
   const rsh = $('#roleShow'); if(rsh) rsh.onclick = roleShow;
-  const rrst = $('#roleReset'); if(rrst) rrst.onclick = () => { dlgRevealed=false; renderDlg(); };
+  const rrst = $('#roleReset'); if(rrst) rrst.onclick = () => { roleReset(); renderDlg(); };
   $$('#dlgLines .dl-btn').forEach(b => {
     const i = +b.dataset.i;
     if(b.dataset.act === 'play'){
@@ -1260,6 +1351,12 @@ function renderDlg(){
       };
     } else if(b.dataset.act === 'rec'){
       b.onclick = () => followRecord(i, b);
+    } else if(b.dataset.act === 'next'){
+      b.onclick = () => {
+        if(!roleRun.running){ toast('先点「▶ 开始对话」再逐句练习'); return; }
+        if(roleRun.step !== i){ toast('请按顺序读当前句'); return; }
+        roleNext();
+      };
     }
   });
 }
@@ -1291,27 +1388,61 @@ async function followRecord(i, btn){
     toast('先听示范，然后跟读这句');
   }catch(e){ toast('无法访问麦克风'); }
 }
+/* 角色扮演：一问一答状态机（对方台词自动播放 → 轮到用户暂停 → 读好推进下一轮） */
+let roleRun = {step:0, running:false};
 function roleStart(){
-  if(!dlgRole) return;
+  if(!dlgRole || !curDlg) return;
+  if(roleRun.running){
+    stopSpeak();
+    roleRun.running = false;
+    const b = $('#roleStart'); if(b) b.textContent = '▶ 开始对话';
+    toast('已暂停角色扮演');
+    return;
+  }
+  roleRun.running = true; roleRun.step = 0;
+  const b = $('#roleStart'); if(b) b.textContent = '⏸ 暂停';
+  roleStep();
+}
+function roleStep(){
   const d = curDlg;
-  const partner = d.lines.filter(l => l.speaker !== dlgRole);
-  const mine = d.lines.filter(l => l.speaker === dlgRole);
-  let i = 0;
-  const step = () => {
-    if(i >= partner.length){
-      const show = $('#roleShow');
-      if(show){ show.style.display='inline-flex'; }
-      toast('轮到你啦！读出你的台词 🎤');
-      highlightLine(-1);
-      return;
-    }
-    const l = partner[i];
-    highlightLine(d.lines.indexOf(l));
-    speak(l.han);
-    i++;
-    setTimeout(step, 1100 + cleanForSpeech(l.han).length * 420);
-  };
-  step();
+  if(!roleRun.running || !d) return;
+  if(roleRun.step >= d.lines.length) return roleFinish();
+  const l = d.lines[roleRun.step];
+  highlightLine(roleRun.step);
+  if(l.speaker === dlgRole){
+    const lineEl = $$('#dlgLines .dlg-line')[roleRun.step];
+    if(lineEl) lineEl.classList.remove('hidden-line');
+    toast('🎤 轮到你啦：读「' + l.han + '」，读好点「✅ 读好了」');
+    return;
+  }
+  speak(l.han);
+  roleRun.step++;
+  setTimeout(() => { if(roleRun.running) roleStep(); }, 900 + cleanForSpeech(l.han).length * 380);
+}
+function roleNext(){
+  if(!roleRun.running) return;
+  roleRun.step++;
+  roleStep();
+}
+function roleFinish(){
+  roleRun.running = false;
+  const b = $('#roleStart'); if(b) b.textContent = '▶ 开始对话';
+  $$('#dlgLines .dlg-line').forEach(el => el.classList.remove('hidden-line'));
+  const d = curDlg, p = getProgress();
+  if(p && d && !p.dialogues.includes(d.id)){
+    p.dialogues.push(d.id);
+    logActivity(d.emoji, d.title, '完成角色扮演练习', 'dialogues');
+    saveProgress(p);
+    toast('完成练习！已记入进度 🎉');
+  }
+  dlgRevealed = true;
+}
+function roleReset(){
+  stopSpeak();
+  roleRun.running = false; roleRun.step = 0;
+  const b = $('#roleStart'); if(b) b.textContent = '▶ 开始对话';
+  dlgRevealed = false;
+  highlightLine(-1);
 }
 function roleShow(){
   const d = curDlg;
@@ -1533,7 +1664,7 @@ function renderProfile(){
             <span class="hi-ico">${esc(h.ico)}</span>
             <span class="hi-what">${esc(h.label)}</span>
             <span class="hi-time">${new Date(h.time).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
-            <span class="hi-score">节奏 ${h.score}</span>
+            <span class="hi-score">${scoreTag(h)} ${h.score}</span>
           </div>`).join('') : '<div class="history-empty">还没有练习记录，去语音页录一段试试吧</div>'}
       </div>
       <div class="profile-col profile-backup" style="grid-column:1/-1">
@@ -1583,6 +1714,14 @@ function renderProfile(){
 }
 
 /* 练习历史记录 */
+/* 练习历史成绩标签：按类型显示「正确率 / 节奏分 / 完成 / 得分」 */
+function scoreTag(h){
+  const t = (h.ico || '') + ' ' + (h.label || '');
+  if(/听力|小测|quiz/i.test(t)) return '正确率';
+  if(/跟读|跟唱|🎵|第\d+句/.test(t)) return '节奏分';
+  if(/对话|打卡|复习|完成/i.test(t)) return '完成';
+  return '得分';
+}
 function logPractice(ico, label, score){
   const p = getProgress();
   p.lastStudyDate = todayKey();
@@ -1682,6 +1821,7 @@ function bindGlobal(){
   $('#ptPlayback').onclick = () => { if(audioEl && recordedUrl) audioEl.play(); };
   /* 词汇页 */
   $('#vocabSearch').addEventListener('input', renderVocabGrid);
+  const d5b = $('#daily5Btn'); if(d5b) d5b.onclick = daily5Start;
   $('#favFilter').onclick = () => { vocabFavOnly = !vocabFavOnly; vocabReviewOnly = false; $('#favFilter').classList.toggle('chip-red', vocabFavOnly); $('#favFilter').setAttribute('aria-pressed', vocabFavOnly?'true':'false'); $('#reviewBtn').classList.remove('active'); $('#reviewBtn').setAttribute('aria-pressed','false'); renderVocabGrid(); };
   $('#reviewBtn').onclick = () => { vocabReviewOnly = !vocabReviewOnly; vocabFavOnly = false; $('#reviewBtn').classList.toggle('active', vocabReviewOnly); $('#reviewBtn').setAttribute('aria-pressed', vocabReviewOnly?'true':'false'); $('#favFilter').classList.remove('chip-red'); $('#favFilter').setAttribute('aria-pressed','false'); renderVocab(); updateReviewBtn(); };
   $('#favPlayAll').onclick = () => {
@@ -1771,7 +1911,7 @@ function renderSong(){
     <div class="lyric-line ${i===sgIdx?'current':''}" data-i="${i}" role="group" tabindex="0" aria-label="第 ${i+1} 句，${esc(l.han)}">
       <span class="ll-no">${i+1}</span>
       <div class="ll-body">
-        <div class="ll-han">${annotateRuby(l.han, l.jp)}</div>
+        <div class="ll-han" lang="yue-Hant-HK">${annotateRuby(l.han, l.jp)}</div>
         <div class="ll-jp">${l.jp}</div>
         <div class="ll-mand">${l.mand}</div>
         <div class="ll-tools">
@@ -1864,7 +2004,7 @@ function showFullLyric(){
       ${s.lyric.map((l,i) => `
         <div class="lf-line" data-i="${i}">
           <span class="lf-no">${i+1}</span>
-          <span class="lf-ruby">${annotateRuby(l.han, l.jp)}</span>
+          <span class="lf-ruby" lang="yue-Hant-HK">${annotateRuby(l.han, l.jp)}</span>
           <span class="lf-mand">${esc(l.mand)}</span>
         </div>`).join('')}
     </div>

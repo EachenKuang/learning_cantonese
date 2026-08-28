@@ -89,6 +89,21 @@ export function sanitizeProfile(raw){
     icon:String(x?.icon||'📖').slice(0,12), title:String(x?.title||'学习记录').slice(0,80),
     sub:String(x?.sub||'').slice(0,120), route:String(x?.route||'home').slice(0,24), time:Number(x?.time)||Date.now()
   })) : [];
+  /* SRS 复习计划：box 1-5 / due 日期 / updatedAt 时间戳（多设备合并靠它裁决） */
+  const reviews = {};
+  if(raw?.reviews && typeof raw.reviews === 'object'){
+    Object.entries(raw.reviews).slice(0,2000).forEach(([key, value])=>{
+      if(typeof key !== 'string' || !key || key.length > 200) return;
+      const box = Math.max(0, Math.min(5, Number(value?.box) || 1));
+      const due = typeof value?.due === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.due) ? value.due : null;
+      if(!due) return;
+      reviews[key] = {
+        box,
+        due,
+        updatedAt: Math.max(0, Number(value?.updatedAt) || 0)
+      };
+    });
+  }
   return {
     favorites:strList(raw?.favorites), learned:strList(raw?.learned), practices,
     quiz:Array.isArray(raw?.quiz) ? raw.quiz.slice(0,100) : [], dialogues:strList(raw?.dialogues,100),
@@ -98,7 +113,20 @@ export function sanitizeProfile(raw){
     goalDate:typeof raw?.goalDate==='string'?raw.goalDate:null,
     goalToday:Math.max(0,Math.min(100,Number(raw?.goalToday)||0)), goalWords:strList(raw?.goalWords,100),
     reminder:!!raw?.reminder, reminderSentDate:typeof raw?.reminderSentDate==='string'?raw.reminderSentDate:null,
-    activities, lastStudyDate:typeof raw?.lastStudyDate==='string'?raw.lastStudyDate:null,
+    reviews, activities, lastStudyDate:typeof raw?.lastStudyDate==='string'?raw.lastStudyDate:null,
     modifiedAt:Math.max(0,Number(raw?.modifiedAt)||0)
   };
+}
+
+/* 按词合并多设备复习记录：同 key 取 updatedAt 较新者（防旧设备整包覆盖新计划） */
+export function mergeReviews(base = {}, incoming = {}){
+  if(!base || typeof base !== 'object') base = {};
+  if(!incoming || typeof incoming !== 'object') return base;
+  const out = { ...base };
+  for(const [key, value] of Object.entries(incoming)){
+    if(typeof key !== 'string' || !key || !value || typeof value !== 'object') continue;
+    const current = out[key];
+    if(!current || (Number(value.updatedAt) || 0) >= (Number(current.updatedAt) || 0)) out[key] = value;
+  }
+  return out;
 }

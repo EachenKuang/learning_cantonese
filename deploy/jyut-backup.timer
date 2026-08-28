@@ -1,0 +1,10 @@
+[Unit]
+Description=粵學堂 备份定时器（每日 03:17，Persistent 补跑）
+
+[Timer]
+OnCalendar=*-*-* 03:17:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

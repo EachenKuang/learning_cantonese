@@ -1,7 +1,7 @@
 /** 粵學堂 · 轻量邀请制云端学习档案 */
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
-import { initStore, reloadStore, getState, mutate, normalizeUserId, hashPassword, verifyPassword, tokenHash, newSessionToken, sanitizeProfile } from './sync-store.mjs';
+import { initStore, reloadStore, getState, mutate, normalizeUserId, hashPassword, verifyPassword, tokenHash, newSessionToken, sanitizeProfile, mergeReviews } from './sync-store.mjs';
 
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = Number(process.env.PORT || 8788);
@@ -81,6 +81,11 @@ const server=createServer(async(req,res)=>{
       const current=auth.user.profile||{version:0,updatedAt:null,data:null};
       if(!Number.isInteger(expected)||expected!==current.version) return sendJson(res,409,{error:'version_conflict',...profileResponse(auth.user)});
       const profile=sanitizeProfile(body.profile), updatedAt=new Date().toISOString();
+      /* SRS 复习记录按词合并：服务端已存 vs 客户端提交，同 key 取 updatedAt 较新者，避免旧设备整包覆盖新计划 */
+      const existing = current.data?.reviews;
+      if(existing && Object.keys(existing).length > 0 && profile.reviews){
+        profile.reviews = mergeReviews(existing, profile.reviews);
+      }
       await mutate(store=>{ const record=store.users[auth.user.id]; record.profile={version:current.version+1,updatedAt,data:profile}; });
       return sendJson(res,200,profileResponse(getState().users[auth.user.id]));
     }
