@@ -863,6 +863,77 @@ function toneMistGet(){
 function toneMistSave(m){
   try{ localStorage.setItem('canto_tone_mistakes', JSON.stringify(m)); }catch(_){}
 }
+/* ================= 粤拼拼写练习（听音写拼 / 看字写拼） ================= */
+let jd = {on:false, i:0, correct:0, streak:0, best:0, total:10, answer:null, mode:'audio'};
+function jpDrillPool(){
+  const pool = [];
+  DATA.initials.forEach(x => { if(x.ex && x.exjp) pool.push({han:x.ex, jp:x.exjp}); });
+  DATA.finals.forEach(x => { if(x.ex && x.exjp) pool.push({han:x.ex, jp:x.exjp}); });
+  DATA.tones.forEach(x => { if(x.ex && x.exjp) pool.push({han:x.ex, jp:x.exjp}); });
+  return pool;
+}
+function renderJpDrill(){
+  const body = $('#jpBody'), stat = $('#jpStat');
+  if(!body) return;
+  if(!jd.on){
+    body.innerHTML = '<p class="tip" style="margin:0 0 12px">听到发音写出粤拼（如 <code>sik6</code>），或者看汉字写粤拼。手机可以用下面的 1–6 快捷键盘输入声调数字。</p>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button type="button" class="btn btn-primary" id="jpStartAudio">🔊 听音写拼（10 题）</button>' +
+        '<button type="button" class="btn btn-ghost" id="jpStartHan">🈶 看字写拼（10 题）</button>' +
+      '</div>';
+    const start = mode => { jd = {on:true, i:0, correct:0, streak:0, best:0, total:10, answer:null, mode}; jpNext(); };
+    const sa = $('#jpStartAudio'); if(sa) sa.onclick = () => start('audio');
+    const sh = $('#jpStartHan'); if(sh) sh.onclick = () => start('han');
+    if(stat) stat.textContent = '未开始';
+    return;
+  }
+  if(jd.i >= jd.total){
+    const pct = Math.round(jd.correct / jd.total * 100);
+    logPractice('⌨️', '粤拼拼写', pct);
+    body.innerHTML = '<div class="td-done"><b>' + (pct >= 80 ? '🏆 犀利！' : pct >= 60 ? '👍 唔错！' : '💪 继续努力！') + '</b>' +
+      '<p>答对 ' + jd.correct + ' / ' + jd.total + ' 题 · 最高连击 ' + jd.best + '</p>' +
+      '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button type="button" class="btn btn-primary" id="jpRestart">🔄 再来一轮</button><button type="button" class="btn btn-ghost" id="jpSwitch">↻ 换模式</button></div></div>';
+    const rt = $('#jpRestart');
+    if(rt) rt.onclick = () => { jd = {on:true, i:0, correct:0, streak:0, best:0, total:10, answer:null, mode:jd.mode}; jpNext(); };
+    const sw = $('#jpSwitch'); if(sw) sw.onclick = () => { jd = {on:false, i:0, correct:0, streak:0, best:0, total:10, answer:null, mode:'audio'}; renderJpDrill(); };
+    if(stat) stat.textContent = '完成 ' + pct + '%';
+    return;
+  }
+  const pool = jpDrillPool();
+  const ans = pool[Math.floor(Math.random() * pool.length)];
+  jd.answer = ans;
+  body.innerHTML = '<div class="td-q">第 ' + (jd.i+1) + ' / ' + jd.total + ' 题</div>' +
+    (jd.mode === 'audio'
+      ? '<button type="button" class="btn btn-primary td-play" id="jpPlay">🔊 听发音</button>'
+      : '<div class="jp-han" lang="yue-Hant-HK">' + esc(ans.han) + '</div>') +
+    '<div class="jp-input-row">' +
+      '<input id="jpInput" class="jp-input" type="text" inputmode="latin" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="输入粤拼，如 sik6" aria-label="输入粤拼">' +
+      '<button type="button" class="btn btn-primary sm" id="jpSubmit">提交</button>' +
+    '</div>' +
+    '<div class="jp-keys">' + [1,2,3,4,5,6].map(n => '<button type="button" class="jp-key" data-n="' + n + '">' + n + '</button>').join('') + '</div>' +
+    '<div class="td-fb" id="jpFb"></div>';
+  const pl = $('#jpPlay'); if(pl) pl.onclick = () => speak(ans.han, {rate:0.7});
+  if(jd.mode === 'audio') setTimeout(() => speak(ans.han, {rate:0.7}), 300);
+  const inp = $('#jpInput');
+  $$('#jpBody .jp-key').forEach(b => b.onclick = () => { inp.value = (inp.value || '') + b.dataset.n; inp.focus(); });
+  const submit = () => jpCheck(inp ? inp.value : '');
+  const sb = $('#jpSubmit'); if(sb) sb.onclick = submit;
+  if(inp) inp.onkeydown = e => { if(e.key === 'Enter') submit(); };
+}
+function jpCheck(value){
+  const fb = $('#jpFb');
+  const norm = s => String(s || '').trim().toLowerCase().replace(/\s+/g, '');
+  const ok = norm(value) === norm(jd.answer.jp);
+  const label = esc(jd.answer.han) + ' → ' + jd.answer.jp;
+  if(ok){ jd.correct++; jd.streak++; jd.best = Math.max(jd.best, jd.streak); if(fb) fb.innerHTML = '<span class="td-ok">✅ 啱！' + label + '</span>'; }
+  else { jd.streak = 0; if(fb) fb.innerHTML = '<span class="td-no">❌ 正确答案是 ' + label + '</span>'; }
+  const inp = $('#jpInput'); if(inp) inp.disabled = true;
+  const sb = $('#jpSubmit'); if(sb) sb.disabled = true;
+  jd.i++;
+  setTimeout(() => { jd.i >= jd.total ? renderJpDrill() : jpNext(); }, 1200);
+}
+function jpNext(){ renderJpDrill(); }
+
 let td = {on:false, i:0, correct:0, streak:0, best:0, total:10, answer:null, opts:[]};
 function renderToneDrill(){
   const body = $('#tdBody'), stat = $('#tdStat');
@@ -939,6 +1010,7 @@ function renderPhonetics(){
   $$('.ph-tab span')[2].textContent = DATA.tones.length;
   renderPhGrid();
   renderToneDrill();
+  renderJpDrill();
 }
 function renderPhGrid(){
   const q = ($('#phSearch').value || '').trim().toLowerCase();

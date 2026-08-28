@@ -863,6 +863,21 @@ input{font-family:inherit;color:inherit}
 .td-opt:hover{border-color:var(--red);transform:translateY(-2px)}
 .td-opt:disabled{opacity:.45;cursor:default;transform:none}
 .td-fb{margin-top:14px;font-weight:700;font-size:13.5px;min-height:24px}
+/* 粤拼拼写练习 */
+.jp-input-row{display:flex;gap:8px;margin-top:12px;align-items:center}
+.jp-input{
+  flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid var(--line);
+  background:var(--card);color:var(--ink);font-size:16px;letter-spacing:.5px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+.jp-input:focus{outline:none;border-color:var(--red)}
+.jp-keys{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.jp-key{
+  width:40px;height:38px;border-radius:9px;background:var(--paper-2);color:var(--ink-2);
+  font-size:15px;font-weight:800;display:grid;place-items:center;transition:all .18s;
+}
+.jp-key:hover{background:var(--red-soft);color:var(--red)}
+.jp-han{font-family:var(--serif);font-size:32px;font-weight:900;color:var(--red);text-align:center;padding:4px 0 6px}
 .td-ok{color:var(--green)}
 .td-no{color:var(--red)}
 .td-done{text-align:center;padding:10px 0}
