@@ -1506,7 +1506,8 @@ function renderLessonStep(L, st){
           fb.className = 'td-fb td-ok';
           pickedBtn.classList.add('correct');
           $('#ltPickA').disabled = true; $('#ltPickB').disabled = true;
-          setTimeout(() => { gi++; renderTone(); }, 1100);
+          /* 若用户在此期间已关闭弹窗，就不要再自动打开下一题 */
+          setTimeout(() => { if(!$('#ltPickA')) return; gi++; renderTone(); }, 1100);
           return;
         }
         /* 答错不卡死：第一次保留两个选项重选，第二次才公布答案并给「继续」 */
