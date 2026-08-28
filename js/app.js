@@ -1073,12 +1073,8 @@ function renderVocabGrid(){
   }
   $$('#vocabGrid .word-card').forEach((card, i) => {
     const w = words[i];
-    const playBtn = $('.wc-play', card);
-    /* 点击卡片 = 朗读该词 */
-    card.onclick = () => {
-      speak(w.han);
-      markWordLearned(cat.id, w);
-    };
+    /* 点击卡片不再朗读，仅按钮触发 */
+    const playBtn = $('.wc-play-sm', card);
     playBtn.onclick = e => {
       e.stopPropagation();
       speak(w.han);
