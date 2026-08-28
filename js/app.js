@@ -1036,12 +1036,13 @@ function renderVocabGrid(){
     return `
     <div class="word-card" style="animation:pageIn .4s ${idx*0.02}s backwards">
       <div class="wc-top">
-        <div>
-          <div class="wc-han" lang="yue-Hant-HK">${w.han}</div>
-          <div class="wc-jp">${w.jp}</div>
+        <div class="wc-han" lang="yue-Hant-HK">${w.han}</div>
+        <div class="wc-tools">
+          <button type="button" class="wc-play-sm" title="听发音">▶</button>
+          <button type="button" class="wc-fav ${fav?'on':''}" title="收藏">${fav?'★':'☆'}</button>
         </div>
-        <button type="button" class="wc-fav ${fav?'on':''}" title="收藏">${fav?'★':'☆'}</button>
       </div>
+      <div class="wc-jp">${w.jp}</div>
       <div class="wc-mand">${esc(w.mand)}</div>
       <div class="wc-ex">
         ${esc(w.ex)}
@@ -1049,8 +1050,6 @@ function renderVocabGrid(){
         <div class="wx-jp">${w.exjp}</div>
         <div class="wx-mand">${esc(w.exmand)}</div>
       </div>
-      <div class="wc-bottom"><span class="wc-cat">${cat.icon} ${cat.name}</span><a class="wc-words" href="https://words.hk/?search=${encodeURIComponent(w.han)}&lang=zh" target="_blank" rel="noopener noreferrer" title="在粵典查询 ${esc(w.han)} 的详细释义">查粵典 ↗</a></div>
-      <button type="button" class="wc-play" title="听发音">▶</button>
     </div>`;
   }).join('') || '<div class="history-empty" style="grid-column:1/-1">没有匹配的词汇</div>';
 
