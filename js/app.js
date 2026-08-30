@@ -851,7 +851,7 @@ function renderHome(){
     {ico:'📖', t:'场景词汇', d:`11 大场景 ${totalWords} 词，点卡即读 + 听力小测`, nav:'vocab'},
     {ico:'💬', t:'对话实战', d:'茶楼点餐、街市买菜，跟读 + 角色扮演', nav:'dialogues'},
     {ico:'🎮', t:'句意填空', d:'听对话原句，选出正确的词补全句意', nav:'fillgame'},
-    {ico:'🎵', t:'学唱粤语歌', d:'11 首经典金曲全曲歌词，逐句跟唱练咬字', nav:'sing'},
+    {ico:'🎵', t:'粤语歌导览', d:'11 首经典曲目导览，配合正版音源练发音', nav:'sing'},
     {ico:'🧩', t:'语法专栏', d:'量词 · 语气词 · 体貌助词，十讲吃透', nav:'grammar'},
     {ico:'🏮', t:'文化趣知', d:'俗语·歇后语·节庆·小食·TVB金句', nav:'culture'},
     {ico:'📊', t:'学习档案', d:'目标 · 打卡 · 收藏 · 练习历史 · 本机备份', nav:'profile'},
@@ -2329,7 +2329,7 @@ function cloudPanelHtml(){
   }
   return `<p>需要跨手机和电脑使用时，可登录受邀账户。网站不开放公开注册，也不会把本机录音上传到云端。</p>
     <div class="cloud-login">
-      <label>账户<input id="cloudUser" autocomplete="username" value="eachen" maxlength="40" spellcheck="false"></label>
+      <label>账户<input id="cloudUser" autocomplete="username" maxlength="40" spellcheck="false" placeholder="请输入受邀账户"></label>
       <label>密码<input id="cloudPassword" type="password" autocomplete="current-password" maxlength="256"></label>
       <button type="button" class="btn btn-primary sm" id="cloudLogin">登录并同步</button>
     </div>
@@ -2599,7 +2599,7 @@ function renderSing(){
       <span class="sc-emoji">${s.emoji}</span>
       <span class="sc-dots"><i></i><i></i><i></i></span>
       <h3>${s.title}</h3>
-      <div class="sc-meta">${s.artist} · ${s.year} · ${s.lyric.length} 句</div>
+      <div class="sc-meta">${s.artist} · ${s.year} · ${s.lyric.length ? `${s.lyric.length} 句练习` : '曲目导览'}</div>
       <div class="sc-tags">${s.tags.map(t=>`<span class="sc-tag">${t}</span>`).join('')}<span class="sc-tag">${s.level}</span></div>
     </button>`).join('');
   $$('#songCards .song-card').forEach(c => c.onclick = () => openSong(c.dataset.sid));
@@ -2625,6 +2625,8 @@ function openSong(id){
 }
 function renderSong(){
   const s = curSong; if(!s) return;
+  const hasPractice = s.lyric.length > 0;
+  const musicUrl = 'https://music.apple.com/cn/search?term=' + encodeURIComponent(`${s.title} ${s.artist}`);
   $('#singHead').innerHTML = `
     <span class="sh-emoji">${s.emoji}</span>
     <div>
@@ -2633,7 +2635,9 @@ function renderSong(){
       <div class="sh-intro">${s.intro}</div>
     </div>`;
   $('#singHead').style.background = 'linear-gradient(135deg,' + s.colors[0] + ',' + s.colors[1] + ')';
-  $('#lyricPanel').innerHTML = s.lyric.map((l,i) => `
+  $('#singStage .sing-toolbar').classList.toggle('hidden', !hasPractice);
+  $('#singStatus').classList.toggle('hidden', !hasPractice);
+  $('#lyricPanel').innerHTML = hasPractice ? s.lyric.map((l,i) => `
     <div class="lyric-line ${i===sgIdx?'current':''}" data-i="${i}" role="group" tabindex="0" aria-label="第 ${i+1} 句，${esc(l.han)}">
       <span class="ll-no">${i+1}</span>
       <div class="ll-body">
@@ -2646,9 +2650,15 @@ function renderSong(){
         </div>
       </div>
       <span class="ll-badge">NOW ▶</span>
-    </div>`).join('');
-  $('#songNotes').innerHTML = `<div class="ga-block" style="margin:0 0 8px"><h4 style="margin-bottom:8px">发音难点</h4></div>` + s.notes.map(n => `
-    <div class="sn-item"><b>${n.target}</b> · <span>${n.tip}</span></div>`).join('');
+    </div>`).join('') : `
+    <div class="empty-state" style="text-align:center;padding:28px 18px">
+      <div style="font-size:34px;margin-bottom:10px">🎧</div>
+      <h3 style="margin-bottom:8px">公共版本不提供第三方歌词</h3>
+      <p class="tip" style="margin-bottom:16px">请配合你合法取得的歌词和正版音源学习；也可以导入本地音频，文件只在本机播放。</p>
+      <a class="btn btn-primary sm" href="${musicUrl}" target="_blank" rel="noopener noreferrer">在 Apple Music 搜索正版音源 ↗</a>
+    </div>`;
+  $('#songNotes').innerHTML = s.notes.length ? `<div class="ga-block" style="margin:0 0 8px"><h4 style="margin-bottom:8px">歌名发音提示</h4></div>` + s.notes.map(n => `
+    <div class="sn-item"><b>${n.target}</b> · <span>${n.tip}</span></div>`).join('') : '';
   $$('#lyricPanel .lyric-line').forEach(el => {
     const i = +el.dataset.i;
     el.onclick = () => gotoLine(i, true);
@@ -2663,7 +2673,7 @@ function renderSong(){
   if(cur) cur.scrollIntoView({behavior:'smooth', block:'center'});
 }
 function gotoLine(i, play){
-  if(!curSong) return;
+  if(!curSong || !curSong.lyric.length) return;
   sgIdx = Math.max(0, Math.min(curSong.lyric.length - 1, i));
   renderSong();
   if(play) speak(curSong.lyric[sgIdx].han);
@@ -2671,7 +2681,7 @@ function gotoLine(i, play){
 function sgPrev(){ gotoLine(sgIdx - 1, true); }
 function sgNext(){ if(sgLoop){ gotoLine(sgIdx, true); toast('🔁 单句循环中：重练本句'); } else { gotoLine(sgIdx + 1, true); } }
 function sgAutoPlay(){
-  if(!curSong || !sgAuto) return;
+  if(!curSong || !curSong.lyric.length || !sgAuto) return;
   const l = curSong.lyric[sgIdx];
   speak(l.han);
   updateSingStatus('⚡ 自动跟唱：示范第 ' + (sgIdx+1) + ' 句 → 轮到你唱 → 自动下一句');
@@ -2723,6 +2733,7 @@ function fmtT(t){
 /* 全文注音视图：整首歌词逐字注音，一排排通读 */
 function showFullLyric(){
   if(!curSong) return;
+  if(!curSong.lyric.length){ toast('公共版本不提供第三方歌词，请配合正版来源学习'); return; }
   const s = curSong;
   openModal(`
     <h3>📄 ${s.title} <span class="chip chip-gold" style="font-size:11px">全文注音</span><button type="button" id="flClose" style="margin-left:auto;border:none;background:none;font-size:18px;color:var(--ink-3);cursor:pointer;padding:2px 6px" title="关闭">✕</button></h3>
@@ -2747,7 +2758,7 @@ function updateSingStatus(txt){
   const el = $('#singStatus');
   if(!el) return;
   if(txt) el.textContent = txt;
-  else if(curSong) el.textContent = '当前：第 ' + (sgIdx+1) + ' / ' + curSong.lyric.length + ' 句 · ' + curSong.lyric[sgIdx].mand;
+  else if(curSong && curSong.lyric.length) el.textContent = '当前：第 ' + (sgIdx+1) + ' / ' + curSong.lyric.length + ' 句 · ' + curSong.lyric[sgIdx].mand;
 }
 function bindSing(){
   $('#singBack').onclick = () => {

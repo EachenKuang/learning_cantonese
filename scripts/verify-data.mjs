@@ -5,8 +5,8 @@
    0. 发布缓存版本（sw.js / index.html 对核心资源 ?v=N 一致）
    1. 顶层板块结构完整（语音/词汇/对话/语法/文化）
    2. 词汇词条必备字段、首尾空格、词头与例句粤拼对齐
-   3. 歌词逐字对齐——每句 han 汉字数必须等于 jp 音节数
-      （逐字注音正确性的生命线，见 README 开发指南）
+   3. 公共歌曲数据不包含第三方歌词；如未来加入已授权或原创练习，
+      每句 han 汉字数必须等于 jp 音节数
    4. 主题课引用完整性（catId/words/dlgId/artId/lifeTitle 都能查到）
    5. 故事完整性（newWords 必须在词库中、逐句对齐、理解题答案合法）
    6. 简繁一致性：面向学习者的粤语文本用繁体
@@ -163,6 +163,7 @@ for (const cat of DATA.vocabCategories) {
 let lineCount = 0;
 for (const s of SONGS) {
   check(s.id && s.title && Array.isArray(s.lyric), `歌曲结构缺失: ${s.title || s.id || '?'}`);
+  check(s.lyric.length === 0, `公共仓库不得包含第三方歌词正文: ${s.title}`);
   for (const l of s.lyric) {
     lineCount++;
     const hanChars = countUnits(l.han);

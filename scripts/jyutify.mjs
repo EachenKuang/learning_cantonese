@@ -12,6 +12,7 @@
      node scripts/jyutify.mjs --apply    # 写回 data.js
    ============================================================ */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,7 +21,8 @@ const ROOT = path.resolve(__dirname, '..');
 const FILE = path.join(ROOT, 'js/data.js');
 
 let mod;
-for (const base of [ROOT, '/Users/eachen/.workbuddy/binaries/node/workspace']) {
+const sharedModules = process.env.WORKBUDDY_NODE_MODULES || path.join(os.homedir(), '.workbuddy', 'binaries', 'node', 'workspace');
+for (const base of [ROOT, sharedModules]) {
   try {
     mod = await import(path.join(base, 'node_modules/opencc-js/dist/umd/full.js'));
     break;

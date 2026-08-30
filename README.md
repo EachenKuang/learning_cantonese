@@ -1,6 +1,6 @@
 # 粵學堂 · 粤语学习工坊
 
-从零到进阶的粤语学习网站：粤拼音标、场景词汇、对话实战、学唱粤语歌、语法专栏、文化趣知、进度追踪。
+从零到进阶的粤语学习网站：粤拼音标、场景词汇、对话实战、粤语歌导览、语法专栏、文化趣知、进度追踪。
 **識聽識講，港味十足。**
 
 > 在线体验：https://jyut.kuangyichen.com
@@ -16,7 +16,7 @@
 | 📖 场景词汇 | 11 大场景 331 个高频词（每类 30–31 个）（含身体部位/校园学习/休闲娱乐），逐词粤拼+例句+普通话对照；点卡片即读、例句朗读、搜索、收藏、听力小测、**今日 5 词**学习流程（学→回忆→小测→入复习） |
 | 💬 对话实战 | 9 个场景（茶楼/街市/巴士/茶餐厅/问路/睇医生/机场/租房/唱K）+ 整段朗读、逐句跟读录音 + 角色扮演一问一答（对方台词→你读→下一轮） |
 | 🎮 句意填空 | 听力 · 句意 · 选词：听对话原句，看句意提示，从 3 个粤拼选项中选出正确词补全句子；题库来自对话实战原句 |
-| 🎵 学唱粤语歌 | **11 首经典全曲歌词**（138 句逐字 ruby 注音，汉字上方标粤拼），TTS 示范/录音跟唱/单句循环/自动跟唱/**全文注音视图**；支持导入本地 mp3 整曲播放（KTV 模式）；歌词常用字词小词典 |
+| 🎵 粤语歌导览 | 11 首经典曲目的原创导览与歌名粤拼提示；支持导入自己合法取得的本地音频（只在本机播放）；公共仓库不提供第三方歌词或音频 |
 | 🧩 语法专栏 | 10 讲：量词、语气词、动词体貌、系字、虚词、比较句、否定、疑问词、程度副词、叠字 |
 | 🏮 文化趣知 | 6 大栏目 58 条：俗语 12 / 歇后语 10 / 港式文化 14 / 节庆习俗 8 / 港式小食 8 / TVB金句 6 |
 | 📊 学习档案 | 无需注册、本机自动保存；连续打卡、每日目标、收藏、练习历史、JSON 备份，以及受邀账户跨设备同步（可选） |
@@ -44,7 +44,7 @@ Nginx 静态托管（HTTPS · PWA · Service Worker 缓存）
         ├── MediaRecorder → 录音对比评估
         ├── 浏览器本地存储 → 本机学习档案 / 进度 / 收藏 / 打卡
         ├── /api/account → 受邀账户登录与学习档案同步（可选）
-        └── 导入 mp3 → 整曲播放（本机、不上传）
+        └── 导入本地音频 → 本机播放（不上传）
 ```
 
 特点：无需注册即可学习，本机档案和 JSON 备份继续保留。登录受邀账户后，进度、目标、收藏、打卡和练习摘要会自动同步；录音、导入歌曲和密码不会进入云端档案。公开注册默认关闭。
@@ -86,7 +86,7 @@ Nginx 静态托管（HTTPS · PWA · Service Worker 缓存）
 ├── js/
 │   ├── app.js                 # 应用逻辑：路由/语音/录音评估/各模块/进度系统
 │   ├── data.js                # 学习内容：音标/词汇/对话/语法/文化
-│   └── songs.js               # 粤语歌数据：11 首全曲歌词 + 发音难点 + 歌词词典
+│   └── songs.js               # 粤语歌事实性元数据 + 原创导览 + 常用字词
 ├── icons/                     # PWA 图标（SVG 源文件 + 多尺寸 PNG）
 ├── manifest.webmanifest       # PWA 清单
 ├── sw.js                      # Service Worker（导航网络优先 + 静态缓存后台刷新）
@@ -145,31 +145,15 @@ npx serve .
   ex:'食咗饭未呀？', exjp:'sik6 zo2 faan6 mei6 aa3', exmand:'吃饭了吗？' }
 ```
 
-### 添加一首新歌
+### 添加一首歌曲导览
 
-1. 在 `js/songs.js` 的 `SONGS` 数组追加歌曲对象：`{ id, title, artist, year, emoji, level, tags, colors:[c1,c2], intro, lyric:[...], notes:[...] }`
-2. `lyric` 每句格式：`{ han:'粤语歌词', jp:'jat1 zeon6 zi2', mand:'普通话释义', d:5.5 }`（`d` 为建议演唱时长秒）
-3. **必须跑对齐校验**（逐字注音正确性的生命线——汉字数必须等于粤拼音节数）：
-
-```bash
-node -e "
-const fs=require('fs');
-fs.writeFileSync('/tmp/sc.cjs', fs.readFileSync('js/songs.js','utf8')+'
-module.exports={SONGS};');
-const {SONGS}=require('/tmp/sc.cjs');
-const hc=s=>(s.match(/[\u4e00-\u9fff]/g)||[]).length, jc=s=>(s.trim().match(/[a-z0-9]+/gi)||[]).length;
-let bad=[];
-SONGS.forEach(song=>song.lyric.forEach((l,i)=>{ if(hc(l.han)!==jc(l.jp)) bad.push(song.title+' 第'+(i+1)+'句: '+l.han+' | '+l.jp); }));
-console.log(bad.length? '❌ '+bad.join('
-') : '✅ 全部对齐');
-"
-```
+在 `js/songs.js` 的 `SONGS` 数组追加事实性元数据、自己的导览文字和歌名发音提示。公共仓库中的 `lyric` 必须保持为空；不要提交第三方歌词、音频、封面或其他未获授权内容。需要练习时，用户可以在浏览器导入自己合法取得的本地音频。
 
 ### 修改内容后的发布流程（重要约定）
 
 1. 修改代码/数据
 2. **同步递增缓存版本**：运行 `node scripts/bump-version.mjs` 一键同步三处（sw.js 的 `canto-shell-vX`、sw.js 缓存数组、index.html 资源引用的 `?v=X`），再 `node scripts/verify-data.mjs` 复核（否则老用户可能出现新旧资源混用，且 CI 的 verify-data 会直接报「缓存版本不一致」）
-3. 提交并推送到 `main`：
+3. 先用 `git status --short` 确认没有账户数据、备份、环境文件或密钥，再提交并推送到 `main`：
 
 ```bash
 git add -A && git commit -m "描述" && git push
@@ -191,7 +175,7 @@ git add -A && git commit -m "描述" && git push
 
 ### 前端技术约定
 
-- 数据驱动：所有内容在 `js/data.js` / `js/songs.js`，改数据即改内容
+- 数据驱动：学习内容在 `js/data.js`，歌曲导览在 `js/songs.js`；公共歌曲数据不得包含第三方歌词
 - 朗读：统一走 `speak(text)`（`js/app.js`），全局语速 `speechRate`（0.5~2 六档，localStorage 记忆）；新增朗读调用**不要写死 rate**
 - 逐字注音：`annotateRuby(han, jp)` 生成 `<ruby>字<rt>粤拼</rt></ruby>`
 - 练习反馈：`evalRecord()` + `renderFeedback()`（时长 50% + 音量 30% + 声调自查 20%）；必须明确它不识别发音准确性
@@ -200,6 +184,11 @@ git add -A && git commit -m "描述" && git push
 
 ## 📄 版权与许可
 
-- 歌词（`js/songs.js`）版权归原作者所有，**仅供个人学习、适当引用**；粤拼与普通话释义为本项目整理，如有出入以官方原版为准。
-- 公开整首展示歌词不在《中华人民共和国著作权法》第二十四条（个人学习/适当引用）的当然豁免范围内——如用于公开传播、商用或公开展示，请先取得权利人授权，或改用片段引用。
-- 项目代码采用仓库内 [LICENSE](LICENSE) 许可
+- 程序代码采用 [MIT License](LICENSE)。
+- 原创课程、例句、导览文字和品牌素材不自动随 MIT 授权，边界见 [CONTENT_LICENSE.md](CONTENT_LICENSE.md)。
+- 公共仓库不收录第三方歌词、音频或封面；“仅供学习”不等于取得公开复制和再分发授权。
+- 第三方软件及外部服务说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+## 🤝 参与项目
+
+提交问题或代码前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)；安全问题请按 [SECURITY.md](SECURITY.md) 私下报告，不要在公开 Issue 中粘贴账户数据、会话 Cookie、日志或服务器配置。

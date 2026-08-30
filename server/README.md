@@ -72,11 +72,11 @@ GET /api/tts?text=原諒我這一生不羈放縱愛自由&voice=hiuGaai&rate=0.7
 
 生产环境使用 `deploy/jyut-sync.service`，数据文件为 `/var/lib/jyut-sync/store.json`。目录归 `jyut-sync` 服务账户所有并设为 `0700`，文件由程序以 `0600` 原子写入。
 
-首次预留账户（尚不能登录）：
+首次预留账户（尚不能登录，以下名称仅为示例）：
 
 ```bash
 sudo -u jyut-sync env JYUT_SYNC_DATA_FILE=/var/lib/jyut-sync/store.json \
-  /usr/local/bin/node /opt/jyut-sync-live/manage-user.mjs ensure eachen '易浅'
+  /usr/local/bin/node /opt/jyut-sync-live/manage-user.mjs ensure demo-user '示例用户'
 sudo systemctl reload jyut-sync
 ```
 
@@ -84,11 +84,11 @@ sudo systemctl reload jyut-sync
 
 ```bash
 sudo -u jyut-sync env JYUT_SYNC_DATA_FILE=/var/lib/jyut-sync/store.json \
-  /usr/local/bin/node /opt/jyut-sync-live/manage-user.mjs set-password eachen '易浅'
+  /usr/local/bin/node /opt/jyut-sync-live/manage-user.mjs set-password demo-user '示例用户'
 sudo systemctl reload jyut-sync
 ```
 
-邀请后续用户时，把 `eachen` 和显示名换成新的用户 ID/名称即可。停用账户会阻止现有会话继续访问：
+邀请后续用户时，把 `demo-user` 和显示名换成新的用户 ID/名称即可。停用账户会阻止现有会话继续访问：
 
 ```bash
 sudo -u jyut-sync env JYUT_SYNC_DATA_FILE=/var/lib/jyut-sync/store.json \
@@ -100,7 +100,7 @@ sudo systemctl reload jyut-sync
 
 ## 自动发布
 
-生产服务器使用与 `eachen_blog` 相同的定时巡检模式：GitHub CI 在 `main` 通过语法和数据校验后滚动更新 `ci-ok` 标签；`check-deploy-jyut.sh` 每 5 分钟只读取 `refs/tags/ci-ok`。发现新的已验证提交后调用 `deploy-jyut-clean.sh`，从该精确 commit 创建版本目录并原子切换软链。CI 未通过时标签不会前移，线上继续保留旧版本。
+生产服务器使用定时巡检模式：GitHub CI 在 `main` 通过语法和数据校验后滚动更新 `ci-ok` 标签；`check-deploy-jyut.sh` 每 5 分钟只读取 `refs/tags/ci-ok`。发现新的已验证提交后调用 `deploy-jyut-clean.sh`，从该精确 commit 创建版本目录并原子切换软链。CI 未通过时标签不会前移，线上继续保留旧版本。
 
 发布脚本只更新静态站和发生变化的后端服务代码，不会覆盖 `/var/lib/jyut-sync/store.json`，也不会自动安装仓库里的 Nginx/systemd 配置。上线前会检查 JavaScript 语法、Service Worker 缓存版本和 Nginx 配置；上线后检查首页、账户 API 与 TTS，失败则切回旧版本。
 

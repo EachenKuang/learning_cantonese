@@ -1,0 +1,25 @@
+name: 功能建议
+description: 提议一个有明确学习场景的改进
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: scene
+    attributes:
+      label: 使用场景
+      description: 谁在什么情况下遇到了什么困难？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案
+      description: 希望产品怎样帮助解决？
+    validations:
+      required: true
+  - type: textarea
+    id: boundary
+    attributes:
+      label: 数据、隐私或版权边界
+      description: 是否涉及账户数据、录音、第三方课程、歌词、音频或外部服务？

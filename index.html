@@ -8,13 +8,13 @@
 <link rel="canonical" href="https://jyut.kuangyichen.com/">
 <link rel="icon" href="icons/favicon-64.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
-<link rel="manifest" href="manifest.webmanifest?v=31">
+<link rel="manifest" href="manifest.webmanifest?v=32">
 <meta name="theme-color" content="#c8102e">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <!-- 状态栏用默认样式（非沉浸式），避免遮挡系统手势区 -->
 <meta name="apple-mobile-web-app-title" content="粵學堂">
 <meta name="mobile-web-app-capable" content="yes">
-<link rel="stylesheet" href="css/style.css?v=31">
+<link rel="stylesheet" href="css/style.css?v=32">
 <!-- Ackee 自托管统计：不用 Cookie、只记录匿名访问数据；CORS/CSP 白名单见 deploy/jyut.kuangyichen.com.conf -->
 <script async src="https://ackee.kuangyichen.com/tracker.js" data-ackee-server="https://ackee.kuangyichen.com" data-ackee-domain="6a901c5f8ff24ff3aa544e70"></script>
 </head>
@@ -226,7 +226,7 @@
       <div class="page-head">
         <div>
           <h2>学唱粤语歌 <span class="jp-tag">Sing Along</span></h2>
-          <p class="page-desc">唱熟一首歌，胜过背十课单词。逐句跟唱经典粤语歌：先听示范，再开口唱，用录音对比练咬字。歌词仅供学习，版权归原作者所有。</p>
+          <p class="page-desc">从经典曲目认识粤语的节奏和发音。公共版本提供曲目导览与歌名发音提示，不分发第三方歌词；请配合正版音源和你合法取得的歌词学习。</p>
         </div>
       </div>
 
@@ -247,7 +247,7 @@
 
         <div class="card sing-player">
           <div class="sp-row">
-            <span class="sp-title">🎧 整曲播放</span>
+            <span class="sp-title">🎧 本地音频播放</span>
             <button type="button" class="btn btn-ghost sm" id="spImport">⬆️ 导入音频（MP3）</button>
             <input type="file" id="spFile" accept="audio/*" hidden>
           </div>
@@ -262,7 +262,7 @@
               <option value="1.1">1.1×</option>
             </select>
           </div>
-          <p class="tip">💡 导入你本地的歌曲文件即可整曲播放（音频只在本机播放、绝不上传）。不导入也不影响：直接用下方的「跟唱练习」，AI 会逐句示范。</p>
+          <p class="tip">💡 可导入你合法取得的本地歌曲文件练习；音频只在本机播放、绝不上传。</p>
         </div>
 
         <div class="sing-toolbar">
@@ -373,10 +373,10 @@
   <button type="button" class="rf-btn" id="rfToggle" title="朗读语速" aria-expanded="false" aria-haspopup="true"><span id="rfLabel">0.75×</span></button>
 </div>
 <div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
-<script src="js/data.js?v=31"></script>
-<script src="js/songs.js?v=31"></script>
-<script src="js/lessons.js?v=31"></script>
-<script src="js/stories.js?v=31"></script>
-<script src="js/app.js?v=31"></script>
+<script src="js/data.js?v=32"></script>
+<script src="js/songs.js?v=32"></script>
+<script src="js/lessons.js?v=32"></script>
+<script src="js/stories.js?v=32"></script>
+<script src="js/app.js?v=32"></script>
 </body>
 </html>

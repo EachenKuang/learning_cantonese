@@ -1,0 +1,39 @@
+name: Bug 报告
+description: 报告可以稳定复现的问题
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: 请勿粘贴真实账户、Cookie、密码、备份、服务器日志或其他隐私数据。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 问题描述
+      description: 实际发生了什么？
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开……
+        2. 点击……
+        3. 看到……
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 环境
+      description: 设备、系统、浏览器和 PWA/网页模式
+    validations:
+      required: true

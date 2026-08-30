@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 私密安全报告
+    url: https://github.com/EachenKuang/learning_cantonese/security/advisories/new
+    about: 请勿在公开 Issue 中披露漏洞或账户数据

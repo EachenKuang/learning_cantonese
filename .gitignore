@@ -7,6 +7,21 @@
 node_modules/
 tts-cache/
 
+# 云端账户、会话与备份数据（绝不能进入 Git）
+sync-data/
+backups/
+store.json
+*.sqlite
+*.db
+
+# 本地环境变量与证书/私钥
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
 # 同步服务数据目录（服务器上位于 /var/lib/jyut-sync；本地误跑脚本会在此生成空骨架）
 sync-data/
 
