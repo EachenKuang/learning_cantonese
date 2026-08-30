@@ -887,6 +887,20 @@ input{font-family:inherit;color:inherit}
 .td-done{text-align:center;padding:10px 0}
 .td-done b{font-size:20px;font-family:var(--serif)}
 .td-done p{color:var(--ink-3);margin:8px 0 16px;font-size:13.5px}
+/* 句意填空挑战 */
+.fillgame-card .fg-body{padding:6px 2px}
+.fg-meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.fg-sentence{font-family:var(--serif);font-size:26px;font-weight:800;color:var(--ink);text-align:center;line-height:1.6;padding:8px 0}
+.fg-blank{display:inline-block;min-width:60px;border-bottom:2px solid var(--red);color:var(--red);margin:0 4px;text-align:center;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.fg-mand{text-align:center;color:var(--ink-2);font-size:14px;margin:6px 0 18px}
+.fg-opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.fg-opt{display:flex;align-items:center;justify-content:center;gap:6px;padding:13px 10px;border-radius:13px;background:var(--paper);border:1px solid var(--line);font-size:16px;font-weight:700;color:var(--ink);cursor:pointer;transition:all .18s;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.fg-opt:hover{border-color:var(--red);background:var(--red-soft);color:var(--red)}
+.fg-opt:disabled{opacity:1;cursor:default;transform:none}
+.fg-opt-ok{border-color:var(--green);background:var(--green-soft);color:var(--green)}
+.fg-opt-ok:hover{border-color:var(--green);background:var(--green-soft);color:var(--green)}
+.fg-opt-no{border-color:var(--red);background:var(--red-soft);color:var(--red)}
+.fg-opt-no:hover{border-color:var(--red);background:var(--red-soft);color:var(--red)}
 
 /* ============ SRS 间隔复习模式 ============ */
 .word-card.review-card{cursor:pointer}

@@ -756,7 +756,7 @@ function renderFeedback(res, target, container){
 }
 
 /* ================= 路由 ================= */
-const ROUTES = {home:'首页', phonetics:'语音学习', vocab:'场景词汇', dialogues:'对话实战', sing:'学唱粤语歌', grammar:'语法专栏', culture:'文化趣知', profile:'学习档案'};
+const ROUTES = {home:'首页', phonetics:'语音学习', vocab:'场景词汇', dialogues:'对话实战', fillgame:'句意填空', sing:'学唱粤语歌', grammar:'语法专栏', culture:'文化趣知', profile:'学习档案'};
 let currentRoute = 'home';
 function routeFromLocation(){
   const route = location.hash.replace(/^#\/?/, '');
@@ -783,6 +783,7 @@ function navigate(route, options={}){
   if(route === 'phonetics') renderPhonetics();
   if(route === 'vocab') renderVocab();
   if(route === 'dialogues') renderDialogues();
+  if(route === 'fillgame') renderFillGame();
   if(route === 'sing') renderSing();
   if(route === 'grammar') renderGrammar();
   if(route === 'culture') renderCulture();
@@ -849,6 +850,7 @@ function renderHome(){
     {ico:'🎙️', t:'语音学习', d:'粤拼声母 · 韵母 · 声调，录音对比发音', nav:'phonetics'},
     {ico:'📖', t:'场景词汇', d:`11 大场景 ${totalWords} 词，点卡即读 + 听力小测`, nav:'vocab'},
     {ico:'💬', t:'对话实战', d:'茶楼点餐、街市买菜，跟读 + 角色扮演', nav:'dialogues'},
+    {ico:'🎮', t:'句意填空', d:'听对话原句，选出正确的词补全句意', nav:'fillgame'},
     {ico:'🎵', t:'学唱粤语歌', d:'11 首经典金曲全曲歌词，逐句跟唱练咬字', nav:'sing'},
     {ico:'🧩', t:'语法专栏', d:'量词 · 语气词 · 体貌助词，十讲吃透', nav:'grammar'},
     {ico:'🏮', t:'文化趣知', d:'俗语·歇后语·节庆·小食·TVB金句', nav:'culture'},
@@ -1966,6 +1968,127 @@ function renderDlg(){
 function highlightLine(i){
   $$('#dlgLines .dlg-line').forEach((el,idx) => el.classList.toggle('current', idx===i));
 }
+
+/* ================= 句意填空挑战 ================= */
+let fg = {on:false, i:0, correct:0, streak:0, best:0, total:10, q:null, answered:false, pool:null, allChoices:null, used:new Set()};
+function fgAlign(han, jp){
+  const h = [...han.replace(/[^\u4e00-\u9fff]/g, '')];
+  const j = jp.replace(/[，。？！、：；""''（）,.?!:;]/g, '').trim().split(/\s+/);
+  if(h.length !== j.length || h.length === 0) return null;
+  return h.map((ch, idx) => ({han: ch, jp: j[idx]}));
+}
+function fgBuildPool(){
+  const pool = [];
+  const allChoices = [];
+  DATA.dialogues.forEach(d => {
+    d.lines.forEach(line => {
+      const aligned = fgAlign(line.han, line.jp);
+      if(!aligned) return;
+      aligned.forEach(x => allChoices.push(x.jp));
+      if(aligned.length <= 3) return; // 至少3个音节才挖中间
+      const positions = [];
+      for(let i = 1; i < aligned.length - 1; i++) positions.push(i);
+      const startIdx = positions[Math.floor(Math.random() * positions.length)];
+      const len = Math.random() < 0.65 ? 1 : 2;
+      const endIdx = Math.min(startIdx + len, aligned.length - 1);
+      if(endIdx <= startIdx) return;
+      const answerParts = aligned.slice(startIdx, endIdx);
+      pool.push({
+        fullHan: line.han, fullJp: line.jp, mand: line.mand, speaker: line.speaker, dlgTitle: d.title,
+        beforeHan: aligned.slice(0, startIdx).map(x => x.han).join(''),
+        afterHan: aligned.slice(endIdx).map(x => x.han).join(''),
+        answerJp: answerParts.map(x => x.jp).join(' '),
+        answerHan: answerParts.map(x => x.han).join('')
+      });
+    });
+  });
+  return {pool, allChoices: [...new Set(allChoices)]};
+}
+function fgDistractors(answerJp){
+  const answerParts = answerJp.split(/\s+/).length;
+  const candidates = (fg.pool || []).map(q => q.answerJp).filter(jp => jp !== answerJp && jp.split(/\s+/).length === answerParts);
+  const out = [];
+  while(out.length < 2 && candidates.length){
+    const idx = Math.floor(Math.random() * candidates.length);
+    out.push(candidates.splice(idx, 1)[0]);
+  }
+  while(out.length < 2){
+    const extra = (fg.allChoices || ['m4','hou2'])[Math.floor(Math.random() * (fg.allChoices || ['m4','hou2']).length)];
+    out.push(answerParts === 1 ? extra : extra + ' ' + extra);
+  }
+  return out;
+}
+function fgBuildQuestion(){
+  const unused = fg.pool.filter((_, idx) => !fg.used.has(idx));
+  const pool = unused.length ? unused : fg.pool;
+  if(!unused.length) fg.used.clear();
+  const q = pool[Math.floor(Math.random() * pool.length)];
+  fg.used.add(fg.pool.indexOf(q));
+  const opts = [q.answerJp, ...fgDistractors(q.answerJp)].sort(() => Math.random() - 0.5);
+  return {...q, opts};
+}
+function renderFillGame(){
+  const body = $('#fgBody'), stat = $('#fgStat');
+  if(!body) return;
+  if(!fg.on){
+    body.innerHTML = '<p class="tip" style="margin:0 0 12px">按题目语音和普通话释义，选出能补全句子的粤语词。全部来自对话实战原句，10 题挑战。</p>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button type="button" class="btn btn-primary" id="fgStart">🎮 开始挑战（10 题）</button>' +
+      '</div>';
+    const st = $('#fgStart');
+    if(st) st.onclick = () => {
+      const built = fgBuildPool();
+      fg = {on:true, i:0, correct:0, streak:0, best:0, total:10, q:null, answered:false, pool: built.pool, allChoices: built.allChoices, used:new Set()};
+      fgNext();
+    };
+    if(stat) stat.textContent = '未开始';
+    return;
+  }
+  if(fg.i >= fg.total){
+    const pct = Math.round(fg.correct / fg.total * 100);
+    logPractice('🎮', '句意填空', pct);
+    body.innerHTML = '<div class="td-done"><b>' + (pct >= 80 ? '🏆 犀利！' : pct >= 60 ? '👍 唔错！' : '💪 继续努力！') + '</b>' +
+      '<p>答对 ' + fg.correct + ' / ' + fg.total + ' 题 · 最高连击 ' + fg.best + '</p>' +
+      '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button type="button" class="btn btn-primary" id="fgRestart">🔄 再来一轮</button><button type="button" class="btn btn-ghost" id="fgHome">🏠 回首页</button></div></div>';
+    const rt = $('#fgRestart');
+    if(rt) rt.onclick = () => { fg = {on:true, i:0, correct:0, streak:0, best:0, total:10, q:null, answered:false, pool: fg.pool, allChoices: fg.allChoices, used:new Set()}; fgNext(); };
+    const hm = $('#fgHome'); if(hm) hm.onclick = () => navigate('home');
+    if(stat) stat.textContent = '完成 ' + pct + '%';
+    return;
+  }
+  const q = fgBuildQuestion();
+  fg.q = q; fg.answered = false;
+  body.innerHTML = '<div class="td-q">第 ' + (fg.i+1) + ' / ' + fg.total + ' 题</div>' +
+    '<div class="fg-meta"><span class="chip chip-ghost">' + esc(q.speaker) + '</span><span class="chip chip-gold">' + esc(q.dlgTitle) + '</span></div>' +
+    '<button type="button" class="btn btn-primary td-play" id="fgPlay">🔊 听原句</button>' +
+    '<div class="fg-sentence" lang="yue-Hant-HK">' + esc(q.beforeHan) + '<span class="fg-blank">____</span>' + esc(q.afterHan) + '</div>' +
+    '<div class="fg-mand">' + esc(q.mand) + '</div>' +
+    '<div class="fg-opts">' + q.opts.map(opt => '<button type="button" class="fg-opt" data-opt="' + esc(opt) + '"><span class="fg-opt-jp">' + esc(opt) + '</span></button>').join('') + '</div>' +
+    '<div class="td-fb" id="fgFb"></div>';
+  const pl = $('#fgPlay'); if(pl) pl.onclick = () => speak(q.fullHan, {rate:0.85});
+  setTimeout(() => speak(q.fullHan, {rate:0.85}), 300);
+  $$('#fgBody .fg-opt').forEach(b => b.onclick = () => fgCheck(b.dataset.opt, b));
+  if(stat) stat.textContent = '第 ' + (fg.i+1) + ' 题';
+}
+function fgCheck(value, btn){
+  if(fg.answered) return;
+  fg.answered = true;
+  const fb = $('#fgFb');
+  const ok = value === fg.q.answerJp;
+  const label = '「' + esc(fg.q.answerHan) + '」' + fg.q.answerJp;
+  $$('#fgBody .fg-opt').forEach(b => {
+    const isAns = b.dataset.opt === fg.q.answerJp;
+    b.disabled = true;
+    b.classList.toggle('fg-opt-ok', isAns);
+    b.classList.toggle('fg-opt-no', !isAns && b === btn);
+  });
+  if(ok){ fg.correct++; fg.streak++; fg.best = Math.max(fg.best, fg.streak); if(fb) fb.innerHTML = '<span class="td-ok">✅ 啱！' + label + '</span>'; }
+  else { fg.streak = 0; if(fb) fb.innerHTML = '<span class="td-no">❌ 正确答案是 ' + label + '</span>'; }
+  fg.i++;
+  setTimeout(() => { fg.i >= fg.total ? renderFillGame() : fgNext(); }, 1600);
+}
+function fgNext(){ renderFillGame(); }
+
 let followRec = {rec:false, mr:null, chunks:[]};
 async function followRecord(i, btn){
   if(followRec.rec){ followRec.rec = false; followRec.mr && followRec.mr.stop(); btn.textContent='🎤 跟读'; btn.classList.remove('recording'); return; }
