@@ -43,6 +43,7 @@ const LESSONS = load(path.join(ROOT, 'js/lessons.js'), 'LESSONS');
 const STORIES = load(path.join(ROOT, 'js/stories.js'), 'STORIES');
 const SW_SOURCE = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 const INDEX_SOURCE = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+const NGINX_CONF_SOURCE = fs.readFileSync(path.join(ROOT, 'deploy/jyut.kuangyichen.com.conf'), 'utf8');
 
 /* ---- 通用工具 ---- */
 /* 剥离括号注释：数字类词条会把「（量詞前多説"兩"）」这类说明写进 ex */
@@ -82,6 +83,22 @@ if (cacheMatch) {
     check(SW_SOURCE.includes(`${asset}?v=${cacheVersion}`), `sw.js 缓存版本不一致 / 缺少核心资源: ${asset}`);
     check(INDEX_SOURCE.includes(`${asset}?v=${cacheVersion}`), `index.html 缓存版本不一致 / 缺少核心资源: ${asset}`);
   }
+}
+
+/* ---- 0.5 Ackee 统计一致性（tracker、CSP、CORS 白名单三处必须对齐） ---- */
+const ACKEE_ORIGIN = 'https://ackee.kuangyichen.com';
+const ackeeTracker = INDEX_SOURCE.match(/data-ackee-domain="([0-9a-f-]+)"/);
+if (ackeeTracker) {
+  check(INDEX_SOURCE.includes(`data-ackee-server="${ACKEE_ORIGIN}"`),
+    `Ackee tracker 的 data-ackee-server 与预期不符（应为 ${ACKEE_ORIGIN}）`);
+  check(/script-src[^;]*ackee\.kuangyichen\.com/.test(NGINX_CONF_SOURCE),
+    'nginx conf 的 CSP script-src 未放行 Ackee 域，tracker.js 会被浏览器拦截');
+  check(/connect-src[^;]*ackee\.kuangyichen\.com/.test(NGINX_CONF_SOURCE),
+    'nginx conf 的 CSP connect-src 未放行 Ackee 域，统计 beacon 会被拦截');
+  check(NGINX_CONF_SOURCE.includes('map $http_origin $ackee_cors_origin'),
+    'nginx conf 缺少 $ackee_cors_origin map（Ackee 的 CORS 白名单）');
+} else {
+  WARNINGS.push('index.html 未检测到 Ackee tracker（如为有意移除请忽略）');
 }
 
 /* ---- 1. 板块结构 ---- */

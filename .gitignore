@@ -7,6 +7,9 @@
 node_modules/
 tts-cache/
 
+# 同步服务数据目录（服务器上位于 /var/lib/jyut-sync；本地误跑脚本会在此生成空骨架）
+sync-data/
+
 # macOS
 .DS_Store
 
