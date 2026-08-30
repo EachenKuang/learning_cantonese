@@ -16,10 +16,11 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
+          package-manager-cache: false
       - name: 语法检查
         run: |
           node --check js/data.js
@@ -45,7 +46,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: 滚动更新 ci-ok tag
         run: |
           remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
