@@ -17,6 +17,6 @@ https://github.com/EachenKuang/learning_cantonese/security/advisories/new
 ## 明确边界
 
 - 云端账户为邀请制，没有公开注册接口。
-- 录音和用户导入的音频只在浏览器本机处理，不应上传到服务器。
+- 录音、用户导入的音频和私人歌词正文只在浏览器本机处理，不应上传到同步服务。私人歌词朗读只使用设备粤语语音，不调用云端 TTS。
 - sync-data、备份、环境文件和证书私钥不得提交到 Git。
 - Edge Read Aloud 是外部在线服务；服务不可用不等同于本站账户或数据泄露。

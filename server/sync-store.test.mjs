@@ -83,6 +83,18 @@ test('sanitizeProfile 缺省时返回空结构（不返回 undefined）', () => 
   const p = sanitizeProfile({});
   assert.deepEqual(p.lessonProgress, {});
   assert.deepEqual(p.stories, []);
+  assert.deepEqual(p.songBookmarks, []);
+});
+
+test('sanitizeProfile 只同步曲目 ID，不接受私人歌词正文', () => {
+  const p = sanitizeProfile({
+    songBookmarks: ['ocean', 'ocean', 'qianqian'],
+    localLyrics: [{title:'私人练习', text:'不应进入云端'}],
+    lyricDraft:'不应进入云端'
+  });
+  assert.deepEqual(p.songBookmarks, ['ocean', 'qianqian']);
+  assert.equal('localLyrics' in p, false);
+  assert.equal('lyricDraft' in p, false);
 });
 
 /* ---- 5. mergeLessonProgress：进度较后者胜，已完成不被打回 ---- */

@@ -5,7 +5,7 @@
    0. 发布缓存版本（sw.js / index.html 对核心资源 ?v=N 一致）
    1. 顶层板块结构完整（语音/词汇/对话/语法/文化）
    2. 词汇词条必备字段、首尾空格、词头与例句粤拼对齐
-   3. 公共歌曲数据不包含第三方歌词；如未来加入已授权或原创练习，
+   3. 歌曲练习数据锁定——歌曲 ID、句数和内容指纹不得意外变化；
       每句 han 汉字数必须等于 jp 音节数
    4. 主题课引用完整性（catId/words/dlgId/artId/lifeTitle 都能查到）
    5. 故事完整性（newWords 必须在词库中、逐句对齐、理解题答案合法）
@@ -18,6 +18,7 @@
 import fs from 'node:fs';
 import vm from 'node:vm';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -159,11 +160,33 @@ for (const cat of DATA.vocabCategories) {
   }
 }
 
-/* ---- 3. 歌词逐字对齐（汉字数 == 音节数）---- */
+/* ---- 3. 歌曲数据锁定 + 歌词逐字对齐（汉字数 == 音节数）---- */
+const SONG_LYRIC_BASELINE = {
+  ocean:       {lines:13, sha256:'6495facbc987be38899eba958a38b5afdc6edad50c5cb0efeddf3daa97924dc3'},
+  qianqian:    {lines:20, sha256:'60365f6563e9fe18dc9b7292755da5b7983cd5c3926b0c94874b00fcdf860472'},
+  redsun:      {lines:16, sha256:'120d5e8d4c6454179260915c666bc1b6f611a6c564ee503cafc4fbb7f9f02783'},
+  lihuanxi:    {lines:11, sha256:'e8ee6bfca975edf4f1b546073178271d79109a22c87610029aa8fc81a2a95aac'},
+  zhenai:      {lines:11, sha256:'c86e671b9d508511c5909a32199ed878bca2e48ddb603037ada58b4304d4b940'},
+  glory:       {lines:15, sha256:'d69d311ddd8703d7f5aac50cb1409728f6f3bd284924a53700d1ee49bd6a6a5b'},
+  shanghai:    {lines:9,  sha256:'7669a176c711644f86f9ceabf96dec10218dcd6df84742f36d859f062e7feb51'},
+  lion:        {lines:9,  sha256:'c9f84aafd529df080442b77fb86f9e8e097ae6f8a5caf4697d14c47a80ad5f03'},
+  manbu:       {lines:11, sha256:'5f3f065c6b6d20ca7ff9ea0cc097f6cca70ebaf7c2736325104751d0de2e070e'},
+  pianpian:    {lines:14, sha256:'b2a549edda0972e745e3898a6ed123893431aaf67b5527ac2e8d3295a123c0b0'},
+  fenfenzhong: {lines:9,  sha256:'1c142cb446ba8cc8075140a27d2de2bc48e9362e72bc62aa3b55656d708e23bd'},
+};
 let lineCount = 0;
 for (const s of SONGS) {
   check(s.id && s.title && Array.isArray(s.lyric), `歌曲结构缺失: ${s.title || s.id || '?'}`);
-  check(s.lyric.length === 0, `公共仓库不得包含第三方歌词正文: ${s.title}`);
+  const baseline = SONG_LYRIC_BASELINE[s.id];
+  check(!!baseline, `歌曲不在锁定清单中: ${s.id || s.title || '?'}`);
+  if (baseline) {
+    check(s.lyric.length === baseline.lines,
+      `歌曲句数发生变化 ${s.title}: ${s.lyric.length} != ${baseline.lines}`);
+    const payload = JSON.stringify(s.lyric.map(({han, jp, mand, d}) => ({han, jp, mand, d})));
+    const digest = createHash('sha256').update(payload).digest('hex');
+    check(digest === baseline.sha256,
+      `歌曲内容指纹发生变化 ${s.title}；请人工核对后再更新基线`);
+  }
   for (const l of s.lyric) {
     lineCount++;
     const hanChars = countUnits(l.han);
@@ -171,6 +194,9 @@ for (const s of SONGS) {
     check(hanChars === syl,
       `歌词对齐失败 ${s.title}:「${l.han}」汉字 ${hanChars} != 音节 ${syl} (${l.jp})`);
   }
+}
+for (const id of Object.keys(SONG_LYRIC_BASELINE)) {
+  check(SONGS.some(s => s.id === id), `锁定歌曲缺失: ${id}`);
 }
 
 /* ---- 4. 主题课引用完整性 ---- */

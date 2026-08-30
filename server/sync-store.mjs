@@ -117,7 +117,7 @@ export function sanitizeProfile(raw){
     });
   }
   return {
-    favorites:strList(raw?.favorites), learned:strList(raw?.learned), practices,
+    favorites:strList(raw?.favorites), songBookmarks:strList(raw?.songBookmarks,100), learned:strList(raw?.learned), practices,
     quiz:Array.isArray(raw?.quiz) ? raw.quiz.slice(0,100) : [], dialogues:strList(raw?.dialogues,100),
     checkins, lastCheckin:typeof raw?.lastCheckin==='string'?raw.lastCheckin:null,
     streak:Math.max(0,Math.min(3650,Number(raw?.streak)||0)),

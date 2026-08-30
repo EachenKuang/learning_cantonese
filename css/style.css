@@ -670,6 +670,18 @@ input{font-family:inherit;color:inherit}
 }
 
 /* ============ 唱粤语歌 ============ */
+.local-lyrics-tool{margin-bottom:22px}
+.local-lyrics-tool code{font-size:12px;color:var(--teal);background:var(--teal-soft);padding:2px 6px;border-radius:6px}
+.local-song-meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0 12px}
+.local-song-meta label,.local-lyrics-label{display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:700;color:var(--ink-2)}
+.local-song-meta input,#localLyricsInput{
+  width:100%;border:1px solid var(--line);border-radius:11px;background:var(--paper);color:var(--ink);
+  padding:10px 12px;font:inherit;transition:border-color .2s,box-shadow .2s;
+}
+#localLyricsInput{resize:vertical;min-height:150px;line-height:1.75;margin-top:6px}
+.local-song-meta input:focus,#localLyricsInput:focus{border-color:var(--teal);box-shadow:0 0 0 3px color-mix(in srgb,var(--teal) 18%,transparent);outline:none}
+.local-lyrics-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.local-privacy-note{font-size:12px;color:var(--ink-3);line-height:1.7;margin-top:10px}
 .song-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;margin-bottom:24px}
 .song-card{
   border-radius:18px;padding:22px;cursor:pointer;position:relative;overflow:hidden;
@@ -680,6 +692,7 @@ input{font-family:inherit;color:inherit}
 .song-card .sc-emoji{position:absolute;top:14px;right:16px;font-size:44px;opacity:.9;filter:drop-shadow(0 4px 8px rgba(0,0,0,.25))}
 .song-card .sc-dots{position:absolute;top:14px;left:16px;display:flex;gap:5px}
 .song-card .sc-dots i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.55)}
+.song-card .sc-bookmark{position:absolute;top:13px;left:58px;font-size:18px;color:#ffe08a;filter:drop-shadow(0 2px 4px rgba(0,0,0,.28))}
 .song-card h3{font-family:var(--serif);font-size:22px;font-weight:900;letter-spacing:1px;text-shadow:0 2px 8px rgba(0,0,0,.3)}
 .song-card .sc-meta{font-size:12.5px;opacity:.9;margin-top:4px}
 .song-card .sc-tags{display:flex;gap:6px;margin-top:10px}
@@ -691,9 +704,12 @@ input{font-family:inherit;color:inherit}
   border-radius:18px;color:#fff;box-shadow:var(--shadow-sm);
 }
 .sing-head .sh-emoji{font-size:40px;filter:drop-shadow(0 4px 8px rgba(0,0,0,.3))}
+.sing-head .sh-copy{flex:1;min-width:0}
 .sing-head h3{font-family:var(--serif);font-size:24px;font-weight:900;letter-spacing:1px}
 .sing-head .sh-meta{font-size:12.5px;opacity:.92;margin-top:3px}
 .sing-head .sh-intro{font-size:12.5px;opacity:.88;margin-top:8px;line-height:1.7;max-width:560px}
+.sh-bookmark,.sh-local{flex:none;align-self:flex-start;padding:7px 11px;border-radius:10px;background:rgba(255,255,255,.18);color:#fff;font-size:12px;font-weight:800;border:1px solid rgba(255,255,255,.34);backdrop-filter:blur(4px)}
+.sh-bookmark:hover{background:rgba(255,255,255,.3)}
 
 .sing-player{margin-bottom:16px}
 .sp-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
@@ -767,10 +783,12 @@ input{font-family:inherit;color:inherit}
 .sw-item .sw-ex{font-size:11.5px;color:var(--ink-3);margin-top:3px}
 
 @media (max-width:520px){
+  .local-song-meta{grid-template-columns:1fr}
   .song-cards{grid-template-columns:1fr 1fr}
   .lyric-line .ll-han{font-size:16px}
   .lyric-line.current .ll-han{font-size:17px}
   .sing-head{flex-wrap:wrap}
+  .sh-bookmark,.sh-local{margin-left:56px}
 }
 
 /* ============ 逐字注音（ruby） ============ */

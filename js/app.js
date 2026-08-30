@@ -106,7 +106,7 @@ let cloudSyncTimer = null;
 let cloudPushChain = Promise.resolve();
 function freshProgress(){
   return {
-    favorites:[], learned:[], practices:[], quiz:[], dialogues:[],
+    favorites:[], songBookmarks:[], learned:[], practices:[], quiz:[], dialogues:[],
     checkins:{}, lastCheckin:null, streak:0,
     goalCount:10, goalDate:null, goalToday:0, goalWords:[],
     reminder:false, reminderSentDate:null, activities:[], lastStudyDate:null, reviews:{},
@@ -122,7 +122,7 @@ function normalizeProgress(raw){
     Object.entries(raw.checkins).slice(0,1500).forEach(([k,v]) => { if(/^\d{4}-\d{2}-\d{2}$/.test(k) && v) checkins[k] = true; });
   }
   return {
-    favorites:cleanStringList(raw.favorites), learned:cleanStringList(raw.learned),
+    favorites:cleanStringList(raw.favorites), songBookmarks:cleanStringList(raw.songBookmarks).slice(0,100), learned:cleanStringList(raw.learned),
     practices:Array.isArray(raw.practices) ? raw.practices.slice(0,60).map(x => ({ico:String(x?.ico||'🎤').slice(0,12),label:String(x?.label||'练习').slice(0,80),score:Math.max(0,Math.min(100,Number(x?.score)||0)),time:Number(x?.time)||Date.now()})) : [],
     quiz:Array.isArray(raw.quiz) ? raw.quiz.slice(0,100) : [], dialogues:cleanStringList(raw.dialogues),
     checkins, lastCheckin:typeof raw.lastCheckin === 'string' ? raw.lastCheckin : null,
@@ -192,7 +192,7 @@ function mergeFirstCloud(localRaw, remoteRaw){
   if(!remoteRaw) return local;
   const newer = local.modifiedAt >= remote.modifiedAt ? local : remote;
   const out = {...newer};
-  ['favorites','learned','dialogues','goalWords'].forEach(key => { out[key]=[...new Set([...(local[key]||[]),...(remote[key]||[])])]; });
+  ['favorites','songBookmarks','learned','dialogues','goalWords'].forEach(key => { out[key]=[...new Set([...(local[key]||[]),...(remote[key]||[])])]; });
   out.checkins = {...remote.checkins,...local.checkins};
   out.practices = mergeUnique([...local.practices,...remote.practices], x=>`${x.time}|${x.label}|${x.score}`, 60);
   out.activities = mergeUnique([...local.activities,...remote.activities], x=>`${x.time}|${x.title}|${x.route}`, 6);
@@ -239,7 +239,7 @@ function mergeCloud3(baseRaw, localRaw, remoteRaw){
   const base=normalizeProgress(baseRaw), local=normalizeProgress(localRaw), remote=normalizeProgress(remoteRaw);
   const out={...local};
   const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
-  const setKeys=new Set(['favorites','learned','dialogues','goalWords']);
+  const setKeys=new Set(['favorites','songBookmarks','learned','dialogues','goalWords']);
   const appendKeys=new Set(['practices','activities']);
   for(const key of Object.keys(base)){
     /* 这三类是按条目累积的状态，永远合并、永不整包覆盖 */
@@ -744,7 +744,7 @@ function renderFeedback(res, target, container){
         <div class="feedback-boundary">此结果只反映录音时长、音量与自查反馈，不识别粤语发音是否准确。</div>
       </div>`;
     $('#fbPlay').onclick = () => { if(audioEl && recordedUrl) audioEl.play(); };
-    $('#fbDemo').onclick = () => speak(target.text);
+    $('#fbDemo').onclick = () => typeof target.speak === 'function' ? target.speak(target.text) : speak(target.text);
     const okBtn = $('#fbToneOk'), badBtn = $('#fbToneBad');
     if(toneSel === true){ okBtn.style.background='var(--red)'; okBtn.style.color='#fff'; }
     else if(toneSel === false){ badBtn.style.background='var(--red)'; badBtn.style.color='#fff'; }
@@ -752,7 +752,7 @@ function renderFeedback(res, target, container){
     $('#fbToneBad').onclick = () => { toneSel = false; draw(); };
   };
   draw();
-  logPractice('跟读', target.text, finalScore(res, null));
+  logPractice(target.logIcon || '跟读', target.logLabel || target.text, finalScore(res, null));
 }
 
 /* ================= 路由 ================= */
@@ -2333,7 +2333,7 @@ function cloudPanelHtml(){
       <label>密码<input id="cloudPassword" type="password" autocomplete="current-password" maxlength="256"></label>
       <button type="button" class="btn btn-primary sm" id="cloudLogin">登录并同步</button>
     </div>
-    <div class="profile-cloud-note">云端仅同步进度、目标、收藏、打卡和练习摘要；每个账户的数据独立存放。新账户由站点管理员邀请创建。</div>`;
+    <div class="profile-cloud-note">云端仅同步进度、目标、生词/曲目收藏、打卡和练习摘要；私人歌词、粤拼、录音和本地音频不会上传。每个账户的数据独立存放。</div>`;
 }
 function renderProfile(){
   const body = $('#profileBody');
@@ -2344,6 +2344,7 @@ function renderProfile(){
     const w = cat && cat.words.find(x => x.han===han);
     return w ? {cat, w} : null;
   }).filter(Boolean);
+  const bookmarkedSongs = p.songBookmarks.map(id => SONGS.find(s => s.id === id)).filter(Boolean);
   const today = todayKey();
   if(p.goalDate !== today){ p.goalDate = today; p.goalToday = 0; p.goalWords = []; saveProgress(p); }
 
@@ -2351,6 +2352,7 @@ function renderProfile(){
     <div class="profile-grid">
       <div class="stat-card"><div class="sc-ico">🔊</div><b>${p.learned.length}</b><span>听过的词汇</span></div>
       <div class="stat-card"><div class="sc-ico">⭐</div><b>${p.favorites.length}</b><span>收藏生词</span></div>
+      <div class="stat-card"><div class="sc-ico">🎵</div><b>${bookmarkedSongs.length}</b><span>收藏曲目</span></div>
       <div class="stat-card"><div class="sc-ico">🎤</div><b>${p.practices.length}</b><span>练习次数</span></div>
       <div class="stat-card"><div class="sc-ico">💬</div><b>${p.dialogues.length}/${DATA.dialogues.length}</b><span>体验过的对话</span></div>
       <div class="stat-card"><div class="sc-ico">🔥</div><b>${p.streak}</b><span>连续打卡（天）</span></div>
@@ -2382,6 +2384,16 @@ function renderProfile(){
             <span class="fi-jp">${f.w.jp} · ${esc(f.w.mand)}</span>
             <button type="button" class="fi-del" title="删除">✕</button>
           </div>`).join('')}</div>` : '<div class="history-empty">还没有收藏，去词汇页点 ☆ 收藏吧</div>'}
+      </div>
+      <div class="profile-col">
+        <h3>🎵 收藏曲目</h3>
+        ${bookmarkedSongs.length ? `<div class="fav-list">${bookmarkedSongs.map(s => `
+          <div class="fav-item song-fav-item" data-song="${s.id}" role="button" tabindex="0" aria-label="打开 ${esc(s.title)} 曲目导览">
+            <span class="fi-han">${esc(s.title)}</span>
+            <span class="fi-jp">${esc(s.artist)} · ${s.year}</span>
+            <button type="button" class="fi-del" title="删除">✕</button>
+          </div>`).join('')}</div>` : '<div class="history-empty">还没有收藏，打开曲目导览后点「收藏曲目」吧</div>'}
+        <p class="profile-cloud-note" style="margin-top:10px">云端只保存曲目 ID；你粘贴的歌词仍只留在当前设备。</p>
       </div>
       <div class="profile-col" style="grid-column:1/-1">
         <h3>📋 练习历史</h3>
@@ -2426,6 +2438,7 @@ function renderProfile(){
   const cloudSyncNow=$('#cloudSyncNow'); if(cloudSyncNow) cloudSyncNow.onclick=async()=>{ await queueCloudPush(); toast(cloudState.error?'同步尚未完成':'云端已是最新'); };
   const cloudLogout=$('#cloudLogout'); if(cloudLogout) cloudLogout.onclick=logoutCloud;
   $$('#profileBody .fav-item').forEach(el => {
+    if(el.dataset.song) return;
     el.querySelector('.fi-del').onclick = e => {
       e.stopPropagation();
       const cat = el.dataset.cat;
@@ -2436,6 +2449,16 @@ function renderProfile(){
     };
     el.onclick = () => { vocabCat = el.dataset.cat; navigate('vocab'); };
     el.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); vocabCat = el.dataset.cat; navigate('vocab'); } };
+  });
+  $$('#profileBody .song-fav-item').forEach(el => {
+    const open = () => { const id = el.dataset.song; navigate('sing'); openSong(id); };
+    el.querySelector('.fi-del').onclick = e => {
+      e.stopPropagation();
+      p.songBookmarks = p.songBookmarks.filter(id => id !== el.dataset.song);
+      saveProgress(p); renderProfile();
+    };
+    el.onclick = open;
+    el.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); open(); } };
   });
 }
 
@@ -2578,28 +2601,118 @@ let curSong = null, sgIdx = 0, sgLoop = false, sgAuto = false, sgAutoTimer = nul
 let songFilter = 'all', songQuery = '';
 let sgAudio = null, sgFileUrl = null;
 let sgRecState = {rec:false, mr:null, chunks:[]};
+const LOCAL_SONG_DRAFT_KEY = 'canto_local_song_draft_v1';
+let privateVoiceWarnAt = 0;
 
 /* 逐字注音：把整句粤拼按音节逐个标到汉字正上方（ruby） */
 function annotateRuby(han, jp){
+  if(!jp) return esc(han);
   const syls = jp.trim().split(/\s+/);
   let si = 0, out = '';
   for(const ch of han){
     if(ch === ' '){ out += ' '; }
-    else if(/[，。！？、；：,.!?;:·—…《》()（）“”‘’]/.test(ch)){ out += ch; }
-    else if(/[a-zA-Z0-9]/.test(ch)){ out += ch; }
-    else { out += '<ruby>' + ch + '<rt>' + (syls[si] || '') + '</rt></ruby>'; si++; }
+    else if(/[，。！？、；：,.!?;:·—…《》()（）“”‘’]/.test(ch)){ out += esc(ch); }
+    else if(/[a-zA-Z0-9]/.test(ch)){ out += esc(ch); }
+    else { out += '<ruby>' + esc(ch) + '<rt>' + esc(syls[si] || '') + '</rt></ruby>'; si++; }
   }
   return out;
 }
 
+function parseLocalLyrics(raw){
+  const source = String(raw || '').trim();
+  if(!source) return [];
+  return source.split(/\r?\n/).map(line => line.trim()).filter(Boolean).slice(0,120).map(line => {
+    const parts = line.split(/\s*[|｜]\s*/);
+    const han = String(parts.shift() || '').trim().slice(0,300);
+    const jp = String(parts.shift() || '').trim().slice(0,600);
+    const mand = String(parts.join('｜') || '').trim().slice(0,300);
+    const units = cleanForSpeech(han).length;
+    return {han, jp, mand, d:Math.max(3, Math.min(14, units * 0.45 + 1.8))};
+  }).filter(line => line.han && cleanForSpeech(line.han));
+}
+function privatePracticeSpeak(text, opts={}){
+  const cleaned = cleanForSpeech(text);
+  if(!cleaned) return;
+  markStudyToday();
+  const chunks = cleaned.length > 16 ? splitChunks(cleaned, 16) : [cleaned];
+  if(!localYueVoice){
+    const now = Date.now();
+    if(now - privateVoiceWarnAt > 8000){
+      privateVoiceWarnAt = now;
+      toast(curSong?.localOnly
+        ? '🔒 私人歌词不发送云端；请先在设备安装粤语（香港）语音，或配合本地音频练习'
+        : '歌词朗读不发送云端；请先在设备安装粤语（香港）语音，或配合本地音频练习');
+    }
+    return;
+  }
+  chunks.forEach((chunk, i) => speakLocal(chunk, {...opts, queue:i > 0 || !!opts.queue}));
+}
+function toggleSongBookmark(id){
+  const p = getProgress();
+  p.songBookmarks = p.songBookmarks || [];
+  const i = p.songBookmarks.indexOf(id);
+  if(i >= 0){ p.songBookmarks.splice(i, 1); toast('已取消歌曲收藏'); }
+  else { p.songBookmarks.push(id); toast('已收藏曲目；只同步曲目 ID'); }
+  saveProgress(p);
+}
+function fillLocalSongEditor(song){
+  $('#localSongTitle').value = song?.title || '';
+  $('#localSongArtist').value = song?.artist || '';
+  $('#songCards').classList.remove('hidden');
+  $('#singStage').classList.add('hidden');
+  curSong = null;
+  requestAnimationFrame(() => {
+    $('#localLyricsTool').scrollIntoView({behavior:'smooth', block:'start'});
+    $('#localLyricsInput').focus();
+  });
+}
+function startLocalLyricsPractice(){
+  const raw = $('#localLyricsInput').value;
+  const lines = parseLocalLyrics(raw);
+  if(!lines.length){ toast('请先粘贴至少一句可朗读的歌词'); $('#localLyricsInput').focus(); return; }
+  const title = ($('#localSongTitle').value || '').trim().slice(0,80) || '本地歌词练习';
+  const artist = ($('#localSongArtist').value || '').trim().slice(0,80) || '私人内容';
+  curSong = {
+    id:'local-draft', title, artist, year:'', emoji:'🎧', level:'私人', tags:['本地'],
+    colors:['#0f766e','#164e63'], intro:`${lines.length} 句私人练习 · 歌词仅保存在当前设备`,
+    lyric:lines, notes:[], localOnly:true
+  };
+  sgIdx = 0; sgLoop = false; sgAuto = false; clearTimeout(sgAutoTimer);
+  logActivity('🎧', title, '打开本地歌词练习（正文未同步）', 'sing');
+  $('#songCards').classList.add('hidden');
+  $('#singStage').classList.remove('hidden');
+  renderSong();
+}
+function saveLocalLyricsDraft(){
+  const raw = $('#localLyricsInput').value;
+  if(!parseLocalLyrics(raw).length){ toast('没有可保存的歌词内容'); return; }
+  LS.set(LOCAL_SONG_DRAFT_KEY, {
+    title:($('#localSongTitle').value || '').trim().slice(0,80),
+    artist:($('#localSongArtist').value || '').trim().slice(0,80),
+    text:raw.slice(0,20000), updatedAt:Date.now()
+  });
+  toast('私人草稿已保存到当前设备，不会云同步');
+}
+function clearLocalLyricsDraft(){
+  openModal('<h3>清空本机歌词草稿？</h3><p style="color:var(--ink-2);margin:12px 0">这会删除当前设备里的歌曲名称、歌手和歌词正文，无法从云端恢复。</p><div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn btn-ghost" id="localClearCancel">取消</button><button type="button" class="btn btn-red" id="localClearConfirm">确认清空</button></div>');
+  $('#localClearCancel').onclick = closeModal;
+  $('#localClearConfirm').onclick = () => {
+    localStorage.removeItem(LOCAL_SONG_DRAFT_KEY);
+    $('#localSongTitle').value = ''; $('#localSongArtist').value = ''; $('#localLyricsInput').value = '';
+    closeModal(); toast('本机歌词草稿已清空');
+  };
+}
+
 function renderSing(){
+  const p = getProgress();
   const list = SONGS.filter(s => (songFilter==='all' || s.level===songFilter) && (!songQuery || (s.title + s.artist).toLowerCase().includes(songQuery)));
   $('#songCards').innerHTML = list.map((s,i) => `
     <button type="button" class="song-card" data-sid="${s.id}" style="background:linear-gradient(135deg,${s.colors[0]},${s.colors[1]});animation:pageIn .4s ${i*0.08}s backwards">
       <span class="sc-emoji">${s.emoji}</span>
       <span class="sc-dots"><i></i><i></i><i></i></span>
-      <h3>${s.title}</h3>
-      <div class="sc-meta">${s.artist} · ${s.year} · ${s.lyric.length ? `${s.lyric.length} 句练习` : '曲目导览'}</div>
+      ${p.songBookmarks.includes(s.id) ? '<span class="sc-bookmark" aria-label="已收藏">★</span>' : ''}
+      <h3>${esc(s.title)}</h3>
+      <div class="sc-meta">${esc(s.artist)} · ${s.year} · ${s.lyric.length ? `${s.lyric.length} 句练习` : '曲目导览'}</div>
       <div class="sc-tags">${s.tags.map(t=>`<span class="sc-tag">${t}</span>`).join('')}<span class="sc-tag">${s.level}</span></div>
     </button>`).join('');
   $$('#songCards .song-card').forEach(c => c.onclick = () => openSong(c.dataset.sid));
@@ -2626,14 +2739,16 @@ function openSong(id){
 function renderSong(){
   const s = curSong; if(!s) return;
   const hasPractice = s.lyric.length > 0;
+  const bookmarked = !s.localOnly && getProgress().songBookmarks.includes(s.id);
   const musicUrl = 'https://music.apple.com/cn/search?term=' + encodeURIComponent(`${s.title} ${s.artist}`);
   $('#singHead').innerHTML = `
     <span class="sh-emoji">${s.emoji}</span>
-    <div>
-      <h3>${s.title}</h3>
-      <div class="sh-meta">${s.artist} · ${s.year} · 难度：${s.level}</div>
-      <div class="sh-intro">${s.intro}</div>
-    </div>`;
+    <div class="sh-copy">
+      <h3>${esc(s.title)}</h3>
+      <div class="sh-meta">${esc(s.artist)}${s.year ? ` · ${s.year}` : ''} · 难度：${esc(s.level)}</div>
+      <div class="sh-intro">${esc(s.intro)}</div>
+    </div>
+    ${s.localOnly ? '<span class="sh-local">🔒 本机内容</span>' : `<button type="button" class="sh-bookmark" id="songBookmark" aria-pressed="${bookmarked}">${bookmarked?'★ 已收藏':'☆ 收藏曲目'}</button>`}`;
   $('#singHead').style.background = 'linear-gradient(135deg,' + s.colors[0] + ',' + s.colors[1] + ')';
   $('#singStage .sing-toolbar').classList.toggle('hidden', !hasPractice);
   $('#singStatus').classList.toggle('hidden', !hasPractice);
@@ -2642,8 +2757,8 @@ function renderSong(){
       <span class="ll-no">${i+1}</span>
       <div class="ll-body">
         <div class="ll-han" lang="yue-Hant-HK">${annotateRuby(l.han, l.jp)}</div>
-        <div class="ll-jp">${l.jp}</div>
-        <div class="ll-mand">${l.mand}</div>
+        <div class="ll-jp">${esc(l.jp)}</div>
+        <div class="ll-mand">${esc(l.mand)}</div>
         <div class="ll-tools">
           <button type="button" class="ll-btn" data-act="demo" data-i="${i}">🔊 示范</button>
           <button type="button" class="ll-btn rec" data-act="rec" data-i="${i}">🎤 跟唱</button>
@@ -2653,11 +2768,11 @@ function renderSong(){
     </div>`).join('') : `
     <div class="empty-state" style="text-align:center;padding:28px 18px">
       <div style="font-size:34px;margin-bottom:10px">🎧</div>
-      <h3 style="margin-bottom:8px">公共版本不提供第三方歌词</h3>
-      <p class="tip" style="margin-bottom:16px">请配合你合法取得的歌词和正版音源学习；也可以导入本地音频，文件只在本机播放。</p>
-      <a class="btn btn-primary sm" href="${musicUrl}" target="_blank" rel="noopener noreferrer">在 Apple Music 搜索正版音源 ↗</a>
+      <h3 style="margin-bottom:8px">该曲目暂未提供逐句练习</h3>
+      <p class="tip" style="margin-bottom:16px">你可以配合正版音源学习，或把自己有权使用的歌词粘贴到本地练习器；正文不会云同步。</p>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button type="button" class="btn btn-primary sm" id="songUseLocal">粘贴私人歌词练习</button><a class="btn btn-ghost sm" href="${musicUrl}" target="_blank" rel="noopener noreferrer">在 Apple Music 搜索正版音源 ↗</a></div>
     </div>`;
-  $('#songNotes').innerHTML = s.notes.length ? `<div class="ga-block" style="margin:0 0 8px"><h4 style="margin-bottom:8px">歌名发音提示</h4></div>` + s.notes.map(n => `
+  $('#songNotes').innerHTML = s.notes.length ? `<div class="ga-block" style="margin:0 0 8px"><h4 style="margin-bottom:8px">发音难点</h4></div>` + s.notes.map(n => `
     <div class="sn-item"><b>${n.target}</b> · <span>${n.tip}</span></div>`).join('') : '';
   $$('#lyricPanel .lyric-line').forEach(el => {
     const i = +el.dataset.i;
@@ -2668,6 +2783,10 @@ function renderSong(){
     const rec = el.querySelector('[data-act=rec]');
     if(rec) rec.onclick = e => { e.stopPropagation(); singRec(i, rec); };
   });
+  const bookmark = $('#songBookmark');
+  if(bookmark) bookmark.onclick = () => { toggleSongBookmark(s.id); renderSong(); };
+  const useLocal = $('#songUseLocal');
+  if(useLocal) useLocal.onclick = () => fillLocalSongEditor(s);
   updateSingStatus();
   const cur = $('#lyricPanel .lyric-line.current');
   if(cur) cur.scrollIntoView({behavior:'smooth', block:'center'});
@@ -2676,14 +2795,14 @@ function gotoLine(i, play){
   if(!curSong || !curSong.lyric.length) return;
   sgIdx = Math.max(0, Math.min(curSong.lyric.length - 1, i));
   renderSong();
-  if(play) speak(curSong.lyric[sgIdx].han);
+  if(play) privatePracticeSpeak(curSong.lyric[sgIdx].han);
 }
 function sgPrev(){ gotoLine(sgIdx - 1, true); }
 function sgNext(){ if(sgLoop){ gotoLine(sgIdx, true); toast('🔁 单句循环中：重练本句'); } else { gotoLine(sgIdx + 1, true); } }
 function sgAutoPlay(){
   if(!curSong || !curSong.lyric.length || !sgAuto) return;
   const l = curSong.lyric[sgIdx];
-  speak(l.han);
+  privatePracticeSpeak(l.han);
   updateSingStatus('⚡ 自动跟唱：示范第 ' + (sgIdx+1) + ' 句 → 轮到你唱 → 自动下一句');
   clearTimeout(sgAutoTimer);
   sgAutoTimer = setTimeout(() => {
@@ -2712,16 +2831,20 @@ async function singRec(i, btn){
       const ana = await analyzeBlob(blob);
       const l = curSong.lyric[i];
       const res = evalRecord({text:l.han}, ana);
-      openModal(`<h3>🎤 跟唱练习反馈 <span class="chip chip-green" style="margin-left:auto">${curSong.title} · 第 ${i+1} 句</span></h3><div id="ptFeedback"></div><div style="text-align:center;margin-top:16px"><button type="button" class="btn btn-ghost sm" id="evalClose">关闭</button></div>`);
-      renderFeedback(res, {text:l.han, jp:l.jp}, $('#ptFeedback'));
+      openModal(`<h3>🎤 跟唱练习反馈 <span class="chip chip-green" style="margin-left:auto">${esc(curSong.title)} · 第 ${i+1} 句</span></h3><div id="ptFeedback"></div><div style="text-align:center;margin-top:16px"><button type="button" class="btn btn-ghost sm" id="evalClose">关闭</button></div>`);
+      renderFeedback(res, {
+        text:l.han, jp:l.jp,
+        speak:curSong.localOnly ? privatePracticeSpeak : null,
+        logIcon:'🎵',
+        logLabel:curSong.localOnly ? `${curSong.title} 第${i+1}句（本机歌词）` : `${curSong.title} 第${i+1}句`
+      }, $('#ptFeedback'));
       $('#evalClose').onclick = closeModal;
-      logPractice('🎵', curSong.title + ' 第' + (i+1) + '句', finalScore(res, null));
       stream.getTracks().forEach(t => t.stop());
     };
     sgRecState.mr = mr; sgRecState.rec = true;
     mr.start();
     btn.textContent = '⏹ 停止'; btn.classList.add('recording');
-    speak(curSong.lyric[i].han);
+    privatePracticeSpeak(curSong.lyric[i].han);
     toast('先听示范，然后跟着唱这一句');
   }catch(e){ toast('无法访问麦克风，请检查权限'); }
 }
@@ -2733,10 +2856,10 @@ function fmtT(t){
 /* 全文注音视图：整首歌词逐字注音，一排排通读 */
 function showFullLyric(){
   if(!curSong) return;
-  if(!curSong.lyric.length){ toast('公共版本不提供第三方歌词，请配合正版来源学习'); return; }
+  if(!curSong.lyric.length){ toast('该曲目暂未提供逐句练习'); return; }
   const s = curSong;
   openModal(`
-    <h3>📄 ${s.title} <span class="chip chip-gold" style="font-size:11px">全文注音</span><button type="button" id="flClose" style="margin-left:auto;border:none;background:none;font-size:18px;color:var(--ink-3);cursor:pointer;padding:2px 6px" title="关闭">✕</button></h3>
+    <h3>📄 ${esc(s.title)} <span class="chip chip-gold" style="font-size:11px">全文注音</span><button type="button" id="flClose" style="margin-left:auto;border:none;background:none;font-size:18px;color:var(--ink-3);cursor:pointer;padding:2px 6px" title="关闭">✕</button></h3>
     <div class="lyric-full">
       ${s.lyric.map((l,i) => `
         <div class="lf-line" data-i="${i}">
@@ -2745,11 +2868,11 @@ function showFullLyric(){
           <span class="lf-mand">${esc(l.mand)}</span>
         </div>`).join('')}
     </div>
-      <p class="tip" style="text-align:center;margin-top:14px">点击任意句朗读 · 歌词仅供学习，版权归原作者所有</p>
-  `, {cls:'lyric-full-modal', label:`${s.title} 全文注音`});
+      <p class="tip" style="text-align:center;margin-top:14px">点击任意句朗读 · 歌词仅供语言学习，版权归原作者及相关权利人所有</p>
+  `, {cls:'lyric-full-modal', label:`${esc(s.title)} 全文注音`});
   $('#flClose').onclick = closeModal;
   $$('#modalRoot .lf-line').forEach(el => el.onclick = () => {
-    speak(s.lyric[+el.dataset.i].han);
+    privatePracticeSpeak(s.lyric[+el.dataset.i].han);
     $$('#modalRoot .lf-line').forEach(x => x.classList.remove('playing'));
     el.classList.add('playing');
   });
@@ -2761,8 +2884,19 @@ function updateSingStatus(txt){
   else if(curSong && curSong.lyric.length) el.textContent = '当前：第 ' + (sgIdx+1) + ' / ' + curSong.lyric.length + ' 句 · ' + curSong.lyric[sgIdx].mand;
 }
 function bindSing(){
+  const localDraft = LS.get(LOCAL_SONG_DRAFT_KEY, null);
+  if(localDraft && typeof localDraft === 'object'){
+    $('#localSongTitle').value = String(localDraft.title || '').slice(0,80);
+    $('#localSongArtist').value = String(localDraft.artist || '').slice(0,80);
+    $('#localLyricsInput').value = String(localDraft.text || '').slice(0,20000);
+  }
+  $('#localLyricsStart').onclick = startLocalLyricsPractice;
+  $('#localLyricsSave').onclick = saveLocalLyricsDraft;
+  $('#localLyricsClear').onclick = clearLocalLyricsDraft;
   $('#singBack').onclick = () => {
     curSong = null; sgAuto = false; clearTimeout(sgAutoTimer);
+    stopSpeak();
+    if(sgAudio) sgAudio.pause();
     $('#singStage').classList.add('hidden');
     $('#songCards').classList.remove('hidden');
   };
