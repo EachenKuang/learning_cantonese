@@ -762,7 +762,27 @@ function routeFromLocation(){
   const route = location.hash.replace(/^#\/?/, '');
   return ROUTES[route] ? route : 'home';
 }
+
+/* ---- Ackee 统计：SPA 路由补报 ----
+   Ackee 默认只在页面首次加载时上报一次。本站是 hash 路由的 SPA，
+   站内跳转不会重新加载页面，后台只会看到落地页一条数据。
+   因此在路由真正变化时手动补报一次；首屏由 <script> 自动上报，需跳过避免重复计数。 */
+const ACKEE_SCRIPT = document.querySelector('script[data-ackee-domain-id]');
+const ACKEE_SERVER = ACKEE_SCRIPT ? ACKEE_SCRIPT.dataset.ackeeServer || '' : '';
+const ACKEE_DOMAIN_ID = ACKEE_SCRIPT ? ACKEE_SCRIPT.dataset.ackeeDomainId || '' : '';
+let ackeeInstance = null, ackeeBooted = false;
+function ackeeRecordRoute(prevRoute, route){
+  if(!ackeeBooted){ ackeeBooted = true; return; }   /* 首屏交给 <script> */
+  if(prevRoute === route) return;                   /* 同页重渲染不算新访问 */
+  try{
+    if(!window.ackeeTracker || !ACKEE_SERVER || !ACKEE_DOMAIN_ID) return;
+    if(!ackeeInstance) ackeeInstance = window.ackeeTracker.create({server:ACKEE_SERVER, domainId:ACKEE_DOMAIN_ID});
+    ackeeInstance.record();
+  }catch(_){ /* 统计失败不影响使用 */ }
+}
+
 function navigate(route, options={}){
+  const prevRoute = currentRoute;
   if(!ROUTES[route]) route = 'home';
   const hash = '#/' + route;
   if(!options.fromHistory && location.hash !== hash){
@@ -792,6 +812,8 @@ function navigate(route, options={}){
   if(route !== 'dialogues'){ $('#dlgDetail').classList.add('hidden'); $('#dlgCards').classList.remove('hidden'); }
   if(route !== 'sing'){ $('#singStage').classList.add('hidden'); $('#songCards').classList.remove('hidden'); }
   if(route !== 'grammar'){ $('#grammarArticle').classList.add('hidden'); }
+  /* 路由已切换（location.hash 已更新），补报一次统计 */
+  ackeeRecordRoute(prevRoute, route);
 }
 function logActivity(icon, title, sub, route){
   const p = getProgress();
