@@ -851,7 +851,7 @@ function renderHome(){
     {ico:'📖', t:'场景词汇', d:`11 大场景 ${totalWords} 词，点卡即读 + 听力小测`, nav:'vocab'},
     {ico:'💬', t:'对话实战', d:'茶楼点餐、街市买菜，跟读 + 角色扮演', nav:'dialogues'},
     {ico:'🎮', t:'句意填空', d:'听对话原句，选出正确的词补全句意', nav:'fillgame'},
-    {ico:'🎵', t:'粤语歌导览', d:'11 首经典曲目导览，配合正版音源练发音', nav:'sing'},
+    {ico:'🎵', t:'粤语歌跟唱', d:'11 首经典曲目，逐句粤拼、释义与跟唱练习', nav:'sing'},
     {ico:'🧩', t:'语法专栏', d:'量词 · 语气词 · 体貌助词，十讲吃透', nav:'grammar'},
     {ico:'🏮', t:'文化趣知', d:'俗语·歇后语·节庆·小食·TVB金句', nav:'culture'},
     {ico:'📊', t:'学习档案', d:'目标 · 打卡 · 收藏 · 练习历史 · 本机备份', nav:'profile'},
@@ -2498,16 +2498,48 @@ function showMobileMore(){
       <button type="button" data-more-nav="sing"><span>🎵</span><b>学唱粤语歌</b><small>逐句听唱与跟读</small></button>
       <button type="button" data-more-nav="grammar"><span>🧩</span><b>语法专栏</b><small>十讲掌握常用结构</small></button>
       <button type="button" data-more-nav="culture"><span>🏮</span><b>文化趣知</b><small>俗语与港式生活</small></button>
+      <button type="button" id="moreGuide"><span>👋</span><b>使用说明</b><small>入门、安装、语音与数据</small></button>
     </div>
   </div>`, {cls:'mobile-more'});
   $('#moreClose').onclick = closeModal;
   $$('[data-more-nav]', modalRoot).forEach(b => b.onclick = () => { const route = b.dataset.moreNav; closeModal(); navigate(route); });
+  $('#moreGuide').onclick = showGuide;
+}
+function showGuide(){
+  openModal(`
+    <h3 id="guideTitle">👋 新手使用说明 <button type="button" class="modal-x" id="guideClose" aria-label="关闭">✕</button></h3>
+    <p class="guide-lead">第一次来，按下面三步走就够了。其他模块可以随时自由探索。</p>
+    <div class="guide-steps">
+      <button type="button" data-guide-nav="phonetics"><i>1</i><span><b>先听声母和声调</b><small>建立粤拼与声音的对应</small></span></button>
+      <button type="button" data-guide-nav="vocab"><i>2</i><span><b>学 5 个场景词</b><small>听示范、看例句、做小测</small></span></button>
+      <button type="button" data-guide-nav="dialogues"><i>3</i><span><b>完成一段对话</b><small>逐句跟读，再试角色扮演</small></span></button>
+    </div>
+    <div class="guide-section">
+      <h4>📲 安装到手机桌面</h4>
+      <p><b>iPhone / iPad：</b>用 Safari 打开本站，点“分享”→“添加到主屏幕”。</p>
+      <p><b>Android：</b>用 Chrome 打开本站，点右上角菜单→“安装应用”或“添加到主屏幕”。</p>
+      <p><b>电脑：</b>Chrome / Edge 地址栏右侧出现安装图标时，点击即可安装。</p>
+    </div>
+    <div class="guide-section">
+      <h4>🔊 发音、进度与隐私</h4>
+      <ul>
+        <li>公共课程联网时优先使用本站“晓佳”粤语语音；不可用时只回退到设备粤语，不用普通话代替。</li>
+        <li>歌曲歌词朗读和私人歌词练习只使用设备粤语语音，不把歌词发送到云端 TTS。</li>
+        <li>无需注册即可学习，进度默认保存在当前设备；受邀账户可选同步进度和收藏。</li>
+        <li>私人歌词、录音和导入音频不进入云端学习档案。</li>
+      </ul>
+    </div>
+  `, {cls:'guide-modal', label:'新手使用说明'});
+  $('#guideClose').onclick = closeModal;
+  $$('[data-guide-nav]', modalRoot).forEach(b => b.onclick = () => { const route = b.dataset.guideNav; closeModal(); navigate(route); });
 }
 function bindGlobal(){
   /* 导航 */
   $$('[data-nav]').forEach(el => el.addEventListener('click', () => navigate(el.dataset.nav)));
   window.addEventListener('popstate', () => navigate(routeFromLocation(), {fromHistory:true}));
   const more = $('#mMore'); if(more) more.onclick = showMobileMore;
+  const guideOpen = $('#guideOpen'); if(guideOpen) guideOpen.onclick = showGuide;
+  const footerGuide = $('#footerGuide'); if(footerGuide) footerGuide.onclick = showGuide;
   $('#dlgBack').onclick = () => { curDlg = null; renderDialogues(); };
   /* 主题 */
   const setTheme = t => {
