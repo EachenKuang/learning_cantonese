@@ -918,6 +918,48 @@ function checkin(){
 /* ================= 语音系统 ================= */
 let phTab = 'initials', phSel = null;
 
+/* 声母正交表：列按发音部位排列，行按发音方法排列。 */
+const INITIAL_IPA = {
+  b:'[p]', p:'[pʰ]', m:'[m]', f:'[f]', d:'[t]', t:'[tʰ]', n:'[n]', l:'[l]',
+  g:'[k]', k:'[kʰ]', ng:'[ŋ]', h:'[h]', gw:'[kʷ]', kw:'[kʷʰ]', w:'[w]',
+  z:'[t͡s~t͡ʃ]', c:'[t͡sʰ~t͡ʃʰ]', s:'[s]', j:'[j]',
+};
+const INITIAL_CHART_COLUMNS = ['双唇音', '唇齿音', '齿龈音', '硬腭音', '软腭音', '喉音'];
+const INITIAL_CHART_ROWS = [
+  {manner:'爆发音', cells:[['b','p'], [], ['d','t'], [], ['g','k','gw','kw'], []]},
+  {manner:'塞擦音', cells:[[], [], ['z','c'], [], [], []]},
+  {manner:'鼻音', cells:[['m'], [], ['n'], [], ['ng'], []]},
+  {manner:'擦音', cells:[[], ['f'], ['s'], [], [], ['h']]},
+  {manner:'近音', cells:[['w'], [], [], ['j'], [], []]},
+  {manner:'边近音', cells:[[], [], ['l'], [], [], []]},
+];
+const INITIAL_MOBILE_GROUPS = [
+  {title:'前部发音', hint:'嘴唇到齿龈', cols:[0, 1, 2]},
+  {title:'后部发音', hint:'硬腭到喉部', cols:[3, 4, 5]},
+];
+
+/* 韵母正交表：列按韵尾排列，行按韵腹及实际音值排列。 */
+const FINAL_CHART_ROWS = [
+  {nucleus:'i',  ipa:'[iː]', cells:['i', null, 'iu', 'im', 'in', null, 'ip', 'it', null]},
+  {nucleus:'i',  ipa:'[e]',  cells:[null, null, null, null, null, 'ing', null, null, 'ik']},
+  {nucleus:'yu', ipa:'[yː]', cells:['yu', null, null, null, 'yun', null, null, 'yut', null]},
+  {nucleus:'u',  ipa:'[uː]', cells:['u', 'ui', null, null, 'un', null, null, 'ut', null]},
+  {nucleus:'u',  ipa:'[o]',  cells:[null, null, null, null, null, 'ung', null, null, 'uk']},
+  {nucleus:'e',  ipa:'[e]',  cells:[null, 'ei', null, null, null, null, null, null, null]},
+  {nucleus:'e',  ipa:'[ɛː]', cells:['e', null, 'eu', 'em', null, 'eng', 'ep', null, 'ek']},
+  {nucleus:'eo', ipa:'[ɵ]',  cells:[null, 'eoi', null, null, 'eon', null, null, 'eot', null]},
+  {nucleus:'oe', ipa:'[œː]', cells:[null, null, null, null, null, 'oeng', null, null, 'oek']},
+  {nucleus:'o',  ipa:'[o]',  cells:[null, null, 'ou', null, null, null, null, null, null]},
+  {nucleus:'o',  ipa:'[ɔː]', cells:['o', 'oi', null, null, 'on', 'ong', null, 'ot', 'ok']},
+  {nucleus:'a',  ipa:'[ɐ]',  cells:[null, 'ai', 'au', 'am', 'an', 'ang', 'ap', 'at', 'ak']},
+  {nucleus:'aa', ipa:'[aː]', cells:['aa', 'aai', 'aau', 'aam', 'aan', 'aang', 'aap', 'aat', 'aak']},
+];
+const FINAL_MOBILE_GROUPS = [
+  {title:'单元音与复元音', hint:'韵腹本身或接元音韵尾', cols:[0, 1, 2], labels:['—', '-i', '-u']},
+  {title:'鼻音韵尾', hint:'以鼻音收尾', cols:[3, 4, 5], labels:['-m', '-n', '-ng']},
+  {title:'入声韵尾', hint:'以 -p / -t / -k 短促收尾', cols:[6, 7, 8], labels:['-p', '-t', '-k']},
+];
+
 /* ================= 声调听辨训练 ================= */
 /* 声调易错组合记录：{ '正确调|误选调': 次数 }，出题优先练错得多的组合 */
 function toneMistGet(){
@@ -1122,26 +1164,140 @@ function renderPhonetics(){
 function renderPhGrid(){
   const q = ($('#phSearch').value || '').trim().toLowerCase();
   let items;
-  if(phTab === 'initials') items = DATA.initials.map(i => ({sym:i.sym, sub:jq(i.exjp), ex:i.ex, exjp:i.exjp}));
+  if(phTab === 'initials') items = DATA.initials.map(i => ({sym:i.sym, sub:jq(i.exjp), ex:i.ex, exjp:i.exjp, ipa:INITIAL_IPA[i.sym]}));
   else if(phTab === 'finals') items = DATA.finals.map(f => ({sym:f.sym, sub:jq(f.exjp), ex:f.ex, exjp:f.exjp, grp:f.grp}));
   else items = DATA.tones.map(t => ({sym:t.num, sub:t.contour, ex:t.ex, exjp:t.exjp, tone:t}));
   if(q) items = items.filter(i => (i.sym+qString(i)).toLowerCase().includes(q));
-  $('#phGrid').innerHTML = items.map((it,idx) => `
-    <button type="button" class="ph-card ${phSel && phSel.sym===it.sym && phSel.tab===phTab?'sel':''}" data-idx="${idx}" style="animation:pageIn .4s ${idx*0.015}s backwards" aria-label="播放 ${esc(it.sym)}，例字 ${esc(it.ex)}">
-      <span class="pc-vol">🔊</span>
-      <div class="pc-sym">${it.sym}</div>
-      <div class="pc-jp">${it.sub}</div>
-      <div class="pc-ex">${it.ex}</div>
-    </button>`).join('') || '<div class="history-empty" style="grid-column:1/-1">没有匹配的音标</div>';
+  const grid = $('#phGrid');
+  grid.classList.toggle('initial-chart-host', phTab === 'initials');
+  grid.classList.toggle('final-chart-host', phTab === 'finals');
+  grid.innerHTML = phTab === 'initials'
+    ? renderInitialChart(items)
+    : phTab === 'finals'
+      ? renderFinalChart(items)
+      : items.map((it,idx) => phCardHtml(it, idx)).join('') || '<div class="history-empty" style="grid-column:1/-1">没有匹配的音标</div>';
   $$('#phGrid .ph-card').forEach(card => {
     card.onclick = () => {
       const it = items[+card.dataset.idx];
       phSel = {tab:phTab, sym:it.sym, item:it};
-      renderPhGrid();
+      $$('#phGrid .ph-card').forEach(x => x.classList.toggle('sel', x.dataset.sym === it.sym));
       speakPhItem(it);
       setPracticeTarget(it);
     };
   });
+}
+function phCardHtml(it, idx, compact=false){
+  return `<button type="button" class="ph-card ${compact?'compact ':''}${phSel && phSel.sym===it.sym && phSel.tab===phTab?'sel':''}" data-idx="${idx}" data-sym="${esc(it.sym)}" style="animation:pageIn .4s ${idx*0.015}s backwards" aria-label="播放 ${esc(it.sym)}，例字 ${esc(it.ex)}">
+    <span class="pc-vol">🔊</span>
+    <div class="pc-sym">${esc(it.sym)}</div>
+    <div class="pc-jp">${esc(it.sub)}</div>
+    <div class="pc-ex">${esc(it.ex)}</div>
+  </button>`;
+}
+function initialCardHtml(it, idx){
+  return `<button type="button" class="ph-card compact ${phSel && phSel.sym===it.sym && phSel.tab===phTab?'sel':''}" data-idx="${idx}" data-sym="${esc(it.sym)}" style="animation:pageIn .4s ${idx*0.02}s backwards" aria-label="播放 ${esc(it.sym)}，例字 ${esc(it.ex)}">
+    <span class="pc-vol">🔊</span>
+    <div class="pc-sym">${esc(it.sym)}</div>
+    <div class="pc-jp">${esc(it.ipa || '')}</div>
+    <div class="pc-ex">${esc(it.ex)} · ${esc(it.sub)}</div>
+  </button>`;
+}
+function initialCellHtml(symbols, bySym){
+  const found = symbols.map(sym => bySym.get(sym)).filter(Boolean);
+  return found.length
+    ? `<div class="initial-cell-items">${found.map(x => initialCardHtml(x.it, x.idx)).join('')}</div>`
+    : '<span class="initial-empty" aria-hidden="true">·</span>';
+}
+function renderInitialChart(items){
+  const bySym = new Map(items.map((it, idx) => [it.sym, {it, idx}]));
+  const rows = INITIAL_CHART_ROWS.filter(row => row.cells.some(cell => cell.some(sym => bySym.has(sym))));
+  if(!rows.length) return '<div class="history-empty">没有匹配的音标</div>';
+
+  const desktop = `<div class="initial-chart-scroll initial-chart-desktop" tabindex="0" aria-label="声母二维表，可横向滚动">
+    <table class="initial-chart">
+      <caption>按发音方法（纵向）与发音部位（横向）查找；同一格内的声母发音位置相同。</caption>
+      <thead><tr><th scope="col">发音方法</th>${INITIAL_CHART_COLUMNS.map(label => `<th scope="col">${esc(label)}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map(row => `<tr>
+        <th scope="row">${esc(row.manner)}</th>
+        ${row.cells.map(cell => `<td class="${cell.some(sym => bySym.has(sym))?'':'initial-empty-cell'}">${initialCellHtml(cell, bySym)}</td>`).join('')}
+      </tr>`).join('')}</tbody>
+    </table>
+  </div>`;
+
+  const mobile = `<div class="initial-chart-mobile" aria-label="声母二维表，手机版分组显示">
+    <p class="final-mobile-tip">手机端按发音部位分成两表，向下看即可，无需左右拖动。</p>
+    ${INITIAL_MOBILE_GROUPS.map(group => {
+      const groupRows = rows.filter(row => group.cols.some(col => row.cells[col].some(sym => bySym.has(sym))));
+      if(!groupRows.length) return '';
+      return `<section class="final-mobile-group">
+        <div class="final-mobile-head"><h3>${esc(group.title)}</h3><span>${esc(group.hint)}</span></div>
+        <table class="initial-mobile-table">
+          <thead><tr><th scope="col">方法</th>${group.cols.map(col => `<th scope="col">${esc(INITIAL_CHART_COLUMNS[col])}</th>`).join('')}</tr></thead>
+          <tbody>${groupRows.map(row => `<tr>
+            <th scope="row">${esc(row.manner)}</th>
+            ${group.cols.map(col => `<td class="${row.cells[col].some(sym => bySym.has(sym))?'':'initial-empty-cell'}">${initialCellHtml(row.cells[col], bySym)}</td>`).join('')}
+          </tr>`).join('')}</tbody>
+        </table>
+      </section>`;
+    }).join('')}
+  </div>`;
+  return desktop + mobile;
+}
+function renderFinalChart(items){
+  const bySym = new Map(items.map((it, idx) => [it.sym, {it, idx}]));
+  const rows = FINAL_CHART_ROWS.filter(row => row.cells.some(sym => sym && bySym.has(sym)));
+  const syllabic = ['m', 'ng'].map(sym => bySym.get(sym)).filter(Boolean);
+  if(!rows.length && !syllabic.length) return '<div class="history-empty">没有匹配的音标</div>';
+
+  const table = rows.length ? `<div class="final-chart-scroll final-chart-desktop" tabindex="0" aria-label="韵母二维表，可横向滚动">
+    <table class="final-chart">
+      <caption>按韵腹（纵向）与韵尾（横向）查找；空格表示本页未列这个组合。</caption>
+      <thead>
+        <tr class="final-group-head">
+          <th scope="col" rowspan="2">韵腹</th>
+          <th scope="colgroup" colspan="1">单元音</th>
+          <th scope="colgroup" colspan="2">复元音</th>
+          <th scope="colgroup" colspan="3">鼻音韵尾</th>
+          <th scope="colgroup" colspan="3">入声韵尾</th>
+        </tr>
+        <tr><th>—</th><th>-i</th><th>-u</th><th>-m</th><th>-n</th><th>-ng</th><th>-p</th><th>-t</th><th>-k</th></tr>
+      </thead>
+      <tbody>${rows.map(row => `<tr>
+        <th scope="row"><b>${esc(row.nucleus)}</b><small>${esc(row.ipa)}</small></th>
+        ${row.cells.map(sym => {
+          const found = sym && bySym.get(sym);
+          return found ? `<td>${phCardHtml(found.it, found.idx, true)}</td>` : '<td class="final-empty"><span aria-hidden="true">·</span></td>';
+        }).join('')}
+      </tr>`).join('')}</tbody>
+    </table>
+  </div>` : '';
+
+  const mobileTables = rows.length ? `<div class="final-chart-mobile" aria-label="韵母二维表，手机版分组显示">
+    <p class="final-mobile-tip">手机端按韵尾类型分成三表，向下看即可，无需左右拖动。</p>
+    ${FINAL_MOBILE_GROUPS.map(group => {
+      const groupRows = rows.filter(row => group.cols.some(col => row.cells[col] && bySym.has(row.cells[col])));
+      if(!groupRows.length) return '';
+      return `<section class="final-mobile-group">
+        <div class="final-mobile-head"><h3>${esc(group.title)}</h3><span>${esc(group.hint)}</span></div>
+        <table class="final-mobile-table">
+          <thead><tr><th scope="col">韵腹</th>${group.labels.map(label => `<th scope="col">${esc(label)}</th>`).join('')}</tr></thead>
+          <tbody>${groupRows.map(row => `<tr>
+            <th scope="row"><b>${esc(row.nucleus)}</b><small>${esc(row.ipa)}</small></th>
+            ${group.cols.map(col => {
+              const sym = row.cells[col], found = sym && bySym.get(sym);
+              return found ? `<td>${phCardHtml(found.it, found.idx, true)}</td>` : '<td class="final-empty"><span aria-hidden="true">·</span></td>';
+            }).join('')}
+          </tr>`).join('')}</tbody>
+        </table>
+      </section>`;
+    }).join('')}
+  </div>` : '';
+
+  const nasal = syllabic.length ? `<section class="syllabic-finals" aria-labelledby="syllabicFinalsTitle">
+    <div><h3 id="syllabicFinalsTitle">鼻音单独成韵</h3><p>不需要另接韵腹，本身就能组成音节。</p></div>
+    <div class="syllabic-final-cards">${syllabic.map(x => phCardHtml(x.it, x.idx, true)).join('')}</div>
+  </section>` : '';
+  return table + mobileTables + nasal;
 }
 function qString(it){ return (it.ex||'') + (it.sub||''); }
 function speakPhItem(it, opts={}){

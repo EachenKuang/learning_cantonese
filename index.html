@@ -13,13 +13,13 @@
 <meta property="og:image" content="https://jyut.kuangyichen.com/icons/icon-512.png">
 <link rel="icon" href="icons/favicon-64.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
-<link rel="manifest" href="manifest.webmanifest?v=36">
+<link rel="manifest" href="manifest.webmanifest?v=39">
 <meta name="theme-color" content="#c8102e">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <!-- 状态栏用默认样式（非沉浸式），避免遮挡系统手势区 -->
 <meta name="apple-mobile-web-app-title" content="粵學堂">
 <meta name="mobile-web-app-capable" content="yes">
-<link rel="stylesheet" href="css/style.css?v=36">
+<link rel="stylesheet" href="css/style.css?v=39">
 <!-- Ackee 自托管统计：不用 Cookie、只记录匿名访问数据；CORS/CSP 白名单见 deploy/jyut.kuangyichen.com.conf -->
 <script async src="https://ackee.kuangyichen.com/tracker.js" data-ackee-server="https://ackee.kuangyichen.com" data-ackee-domain-id="ac31c9e9-13d7-4615-b6bd-41f30604ac66"></script>
 </head>
@@ -175,6 +175,9 @@
           <button type="button" class="btn btn-ghost sm" id="phStopAll">⏹ 停止</button>
         </div>
       </div>
+
+      <div class="ph-grid" id="phGrid"></div>
+
       <div class="card tone-drill" id="toneDrill">
         <div class="card-head"><h3>🎯 声调听辨训练</h3><span class="chip chip-gold" id="tdStat">未开始</span></div>
         <div class="td-body" id="tdBody"></div>
@@ -184,9 +187,6 @@
         <div class="card-head"><h3>⌨️ 粤拼拼写练习</h3><span class="chip chip-green" id="jpStat">未开始</span></div>
         <div class="td-body" id="jpBody"></div>
       </div>
-
-      <div class="ph-grid" id="phGrid"></div>
-
 
       <div class="card practice-card" id="practiceCard">
         <div class="card-head"><h3>🎤 发音练习台</h3><span class="chip chip-green" id="practiceStatus">选择卡片开始</span></div>
@@ -425,10 +425,10 @@
   <button type="button" class="rf-btn" id="rfToggle" title="朗读语速" aria-expanded="false" aria-haspopup="true"><span id="rfLabel">0.75×</span></button>
 </div>
 <div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
-<script src="js/data.js?v=36"></script>
-<script src="js/songs.js?v=36"></script>
-<script src="js/lessons.js?v=36"></script>
-<script src="js/stories.js?v=36"></script>
-<script src="js/app.js?v=36"></script>
+<script src="js/data.js?v=39"></script>
+<script src="js/songs.js?v=39"></script>
+<script src="js/lessons.js?v=39"></script>
+<script src="js/stories.js?v=39"></script>
+<script src="js/app.js?v=39"></script>
 </body>
 </html>

@@ -3,17 +3,17 @@
    - 页面导航（navigate）：network-first，保证用户打开即最新版
    - 静态资源：stale-while-revalidate，先用缓存（快）后台刷新缓存
    - 发布新内容时：把 CACHE 版本号 +1（如 canto-shell-v2），activate 自动清旧缓存 */
-const CACHE = 'canto-shell-v36';
+const CACHE = 'canto-shell-v39';
 const CORE = [
   './',
   './index.html',
-  './manifest.webmanifest?v=36',
-  './css/style.css?v=36',
-  './js/data.js?v=36',
-  './js/songs.js?v=36',
-  './js/lessons.js?v=36',
-  './js/stories.js?v=36',
-  './js/app.js?v=36',
+  './manifest.webmanifest?v=39',
+  './css/style.css?v=39',
+  './js/data.js?v=39',
+  './js/songs.js?v=39',
+  './js/lessons.js?v=39',
+  './js/stories.js?v=39',
+  './js/app.js?v=39',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
