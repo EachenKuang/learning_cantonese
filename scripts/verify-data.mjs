@@ -88,8 +88,11 @@ if (cacheMatch) {
 
 /* ---- 0.5 Ackee 统计一致性（tracker、CSP、CORS 白名单三处必须对齐） ---- */
 const ACKEE_ORIGIN = 'https://ackee.kuangyichen.com';
-const ackeeTracker = INDEX_SOURCE.match(/data-ackee-domain="([0-9a-f-]+)"/);
+/* Ackee 3.x 的 tracker 读 data-ackee-domain-id（v2 才是 data-ackee-domain，写错会静默不上报） */
+const ackeeTracker = INDEX_SOURCE.match(/data-ackee-domain-id="([0-9a-f-]{36})"/);
 if (ackeeTracker) {
+  check(!/data-ackee-domain="/.test(INDEX_SOURCE),
+    'index.html 仍在用 v2 写法 data-ackee-domain；Ackee 3.x 只认 data-ackee-domain-id，否则静默不统计');
   check(INDEX_SOURCE.includes(`data-ackee-server="${ACKEE_ORIGIN}"`),
     `Ackee tracker 的 data-ackee-server 与预期不符（应为 ${ACKEE_ORIGIN}）`);
   check(/script-src[^;]*ackee\.kuangyichen\.com/.test(NGINX_CONF_SOURCE),
