@@ -2702,7 +2702,7 @@ function showGuide(){
       <h4>🔊 发音、进度与隐私</h4>
       <ul>
         <li>公共课程联网时优先使用本站“晓佳”粤语语音；不可用时只回退到设备粤语，不用普通话代替。</li>
-        <li>歌曲歌词朗读和私人歌词练习只使用设备粤语语音，不把歌词发送到云端 TTS。</li>
+        <li>歌曲歌词朗读和私人歌词练习优先使用本站云端粤语语音（晓佳），不可用时自动回退到设备粤语语音。</li>
         <li>无需注册即可学习，进度默认保存在当前设备；受邀账户可选同步进度和收藏。</li>
         <li>私人歌词、录音和导入音频不进入云端学习档案。</li>
       </ul>
@@ -2812,7 +2812,7 @@ let songFilter = 'all', songQuery = '';
 let sgAudio = null, sgFileUrl = null;
 let sgRecState = {rec:false, mr:null, chunks:[]};
 const LOCAL_SONG_DRAFT_KEY = 'canto_local_song_draft_v1';
-let privateVoiceWarnAt = 0;
+let privateVoiceWarnAt = 0; /* 已弃用：私人歌词改为走云端 TTS，见 privatePracticeSpeak */
 
 /* 逐字注音：把整句粤拼按音节逐个标到汉字正上方（ruby） */
 function annotateRuby(han, jp){
@@ -2845,17 +2845,9 @@ function privatePracticeSpeak(text, opts={}){
   if(!cleaned) return;
   markStudyToday();
   const chunks = cleaned.length > 16 ? splitChunks(cleaned, 16) : [cleaned];
-  if(!localYueVoice){
-    const now = Date.now();
-    if(now - privateVoiceWarnAt > 8000){
-      privateVoiceWarnAt = now;
-      toast(curSong?.localOnly
-        ? '🔒 私人歌词不发送云端；请先在设备安装粤语（香港）语音，或配合本地音频练习'
-        : '歌词朗读不发送云端；请先在设备安装粤语（香港）语音，或配合本地音频练习');
-    }
-    return;
-  }
-  chunks.forEach((chunk, i) => speakLocal(chunk, {...opts, queue:i > 0 || !!opts.queue}));
+  /* 私人歌词朗读：与公共课程一致，优先走云端粤语 TTS（晓佳），不可用时自动回退设备语音。
+     speak() 内部已处理 msedge-tts 限流和分块；不再强制要求本机粤语语音。 */
+  chunks.forEach((chunk, i) => speak(chunk, {...opts, queue:i > 0 || !!opts.queue}));
 }
 function toggleSongBookmark(id){
   const p = getProgress();
