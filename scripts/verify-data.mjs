@@ -176,6 +176,12 @@ const SONG_LYRIC_BASELINE = {
   manbu:       {lines:11, sha256:'5f3f065c6b6d20ca7ff9ea0cc097f6cca70ebaf7c2736325104751d0de2e070e'},
   pianpian:    {lines:14, sha256:'b2a549edda0972e745e3898a6ed123893431aaf67b5527ac2e8d3295a123c0b0'},
   fenfenzhong: {lines:9,  sha256:'1c142cb446ba8cc8075140a27d2de2bc48e9362e72bc62aa3b55656d708e23bd'},
+  /* 陳奕迅 5 首（2026-09-01 新增）：内容与对齐已人工核对后登记 */
+  fushishan:    {lines:14, sha256:'71def2eb3cf2d36d0b9c93847f439e667b527f1f9624e75c743c2a3878fe3542'},
+  fukwaa:       {lines:14, sha256:'fb2d97e4441cd4cae1ea0c9391edf5c5e453c432b2e334d71c3a541ba47c0f55'},
+  kgezhiwang:   {lines:13, sha256:'eb3b1e605a6193d3b8dc031f9b967ecef6ed902fac551cb03f09f73ab8eec9a6'},
+  danche:       {lines:13, sha256:'85cc0191e230a53f7ed658c11c6c3553ddd391ef5f7388248862ca917a7387e4'},
+  mingnianjinri:{lines:13, sha256:'9bd713d0ad9c641dee74c0efc04de6d0162fefa8cac5f190afa130d75ab9952c'},
 };
 let lineCount = 0;
 for (const s of SONGS) {
